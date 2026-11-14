@@ -2,67 +2,127 @@
   <img src="assets/logo-128.png" width="80" alt="AntigravityPlusPlus">
 </p>
 
-<h1 align="center">AntigravityPlusPlus Lite</h1>
+<h1 align="center">AntigravityPlusPlus</h1>
 
-<p align="center">免 TUN 代理 · 可逆界面汉化 · 上下文与模型用量圆环</p>
+<p align="center">面向 Antigravity 桌面端与 IDE 的独立 Lite 启动器</p>
 
-AntigravityPlusPlus 是 Antigravity 的独立轻量启动器，支持桌面版与 IDE 启动选择。当前发行版本为 **4.0.5 Lite**，完整更新内容见 [发布说明](docs/RELEASE-v4.0.5.md)。
+<p align="center">
+  <a href="https://github.com/shallFun4Learning/AntigravityPlusPlus/actions/workflows/tauri-ci.yml"><img src="https://github.com/shallFun4Learning/AntigravityPlusPlus/actions/workflows/tauri-ci.yml/badge.svg" alt="Tauri Build"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+</p>
 
-## 功能
+[中文](README.md) · [English](README.en.md)
 
-- **免 TUN 代理**：启动时向程序传入本地代理配置，支持常用端口和自定义端口。直连环境可关闭；AntigravityPlusPlus 不提供代理节点。
-- **进程冲突恢复**：已有 AG 进程阻止启动时，在弹窗中选择清理并重新启动；运行中点击原启动按钮也能打开。请先保存工作。
-- **启动目标选择**：在桌面版与 IDE 版间切换，自动寻找安装位置。找不到程序时才弹出路径设置，支持手动输入、浏览选择、保存及恢复默认。
-- **可逆界面汉化**：桌面版通过 CDP 动态翻译界面，关闭开关后恢复原文，不修改安装包。
-- **上下文与模型用量圆环**：桌面版与 IDE 输入区并列显示最近请求的上下文估算和当前模型剩余用量。点击后可查看采样模型、输出速度、额度窗口与重置时间；额度接口不可用时明确显示不可用，不猜测百分比。
-- **热更新**：检查更新可拉取词典与后台/UI 补丁，执行 SHA-256 校验；原生外壳升级仍需下载完整包。
-- **后台驻留**：关闭窗口后继续驻留托盘或 macOS 顶部菜单栏；macOS 隐藏窗口时隐藏 Dock 图标。
+AntigravityPlusPlus 是一个独立维护的 Lite 启动器，为 Antigravity 桌面端和 IDE 提供本地代理配置、可逆界面汉化、上下文监控和模型额度监控。项目不提供代理节点，也不会修改 Antigravity 的安装包。
 
-桌面版与 IDE 均支持启动、代理配置和上下文、模型用量圆环（含模型、速度与额度详情）。界面汉化仍仅用于桌面版。
+## 项目定位
 
-## 下载与使用
+AntigravityPlusPlus 将启动、进程管理和界面增强集中在一个轻量应用中：
 
-1. 在 [Releases](https://github.com/shallFun4Learning/AntigravityPlusPlus/releases) 下载对应系统的完整包。
-2. Windows 完整解压后运行 `AntigravityPlusPlus.exe`，保留同目录 `easyag-node.exe` 和 `backend` 文件夹；macOS 解压后打开应用。
-3. 打开自己的代理客户端，选择对应 HTTP / Mixed 端口，或关闭免 TUN 代理使用直连。
-4. 选择桌面版或 IDE，点击启动。若程序已经打开，请保存工作并退出，再通过 AntigravityPlusPlus 启动。
+- 通过免 TUN 进程代理连接用户自己的本地代理。
+- 在桌面端和 IDE 之间选择启动目标，并自动检测安装路径。
+- 通过 CDP 动态注入界面增强，关闭功能后恢复原文。
+- 在 Antigravity 输入区显示上下文使用量和模型剩余额度。
+- 使用本地只读接口读取额度窗口、剩余比例和重置时间。
+- 在进程冲突或后台残留时提供清理后重新启动的处理流程。
 
-从托盘或顶部菜单栏选择“退出应用”可彻底退出 AntigravityPlusPlus。详细使用方式见 [便携版说明](docs/PORTABLE.md)。
+## 主要功能
 
-已有 Windows Lite 版用户可点击“检查更新”，完成后从托盘彻底退出 AntigravityPlusPlus 再打开，无需重新下载。
+### Lite 启动器
 
-macOS Apple Silicon / Intel 包仍为 Beta，未经过 Apple 公证。要获得 Dock 修复，需要下载完整包并替换整个应用。本次后台、界面与词典更新也支持 macOS Lite 热更新；检查更新按钮无法使用时，请下载完整包。
+- 支持 Antigravity 桌面端和 IDE。
+- 支持常见本地代理端口和自定义端口。
+- 支持直连模式，不强制启用代理。
+- 支持 Windows 和 macOS；macOS 发布包当前按 Beta 流程验证。
 
-## 反重力账号与登录指南
+### 上下文与额度监控
 
-遇到 Antigravity 账号注册、登录受限等问题，可以参考社区整理的 [Antigravity 账号登录与常见问题指南（飞书知识库）](https://zcn91ppq6ur7.feishu.cn/wiki/L748wAHTriwwGVkc7TSc3TSennb)。
+- 上下文圆环显示最近请求的上下文估算。
+- 额度圆环优先显示当前具体模型的剩余用量。
+- 没有具体模型额度时，回退到对应共享模型族额度。
+- 详情面板显示每周窗口、5 小时窗口、剩余比例和重置时间。
+- 真实耗尽、未知、禁用和接口不可用分别显示。
+- 小于 1% 的有效剩余额度按 0% 显示，避免将已耗尽额度误显示为 1%。
+- 监控功能只读取本地语言服务数据，不上传账号信息或访问凭据。
 
-## 版本说明
+### 可逆界面增强
 
-当前 Lite 版专注代理、汉化与上下文监控。Turbo Pilot、ARES 风险提示等历史功能属于原项目的早期版本，当前独立项目不继续维护这些历史分支。
+- 桌面端支持动态界面汉化。
+- 关闭汉化后恢复页面原文。
+- IDE 继续提供上下文和额度监控，但不注入桌面端汉化字典。
+- 热更新支持词典和后台/UI 资源，并通过 SHA-256 校验下载内容。
 
-## 开发
+## 使用方式
 
-基于 Tauri、Node.js 和原生 Web 前端。需要 Node.js 22 或更高版本；构建原生应用还需要 Rust 和平台构建依赖。
+### 从源码运行
 
-```sh
+需要 Node.js 22 或更高版本：
+
+```bash
 npm ci
 npm start
+```
+
+启动器会在本地启动服务并输出访问地址。开发调试时可以使用浏览器打开该地址。
+
+### 运行检查
+
+```bash
 npm run check
 npm test
 ```
 
-浏览器交互回归使用独立测试页面和模拟接口，不会启动真实 Antigravity：
+测试使用模拟接口和隔离数据目录，不会启动真实的 Antigravity 进程。
 
-```sh
-npm run test:launcher:browser -- "浏览器可执行文件的完整路径"
+### 构建 macOS App
+
+以 Apple Silicon 为例：
+
+```bash
+npm ci
+npm run check
+npm test
+node scripts/prepare-tauri.cjs aarch64-apple-darwin
+npx --yes @tauri-apps/cli@2 build --target aarch64-apple-darwin --bundles app
 ```
 
-三个平台均通过 GitHub Actions 打包验证，并提供 SHA-256 校验和。4.0.5 复用已验证的原生构建，更新后台资源后在对应平台重新测试与打包。
+Intel macOS 使用 `x86_64-apple-darwin`，Windows 使用 `x86_64-pc-windows-msvc`。构建原生应用还需要对应平台的 Rust 工具链和系统构建依赖。
+
+## 项目结构
+
+| 目录 | 作用 |
+| --- | --- |
+| `core/` | 会话、设置、存储和事件基础设施 |
+| `features/` | 代理、汉化、上下文和额度监控 |
+| `adapters/desktop/` | 桌面端与 IDE 的发现、CDP 和语言服务适配 |
+| `desktop/` | 应用组装、本地 API 和宿主通信 |
+| `ui/` | 启动器界面和交互逻辑 |
+| `src-tauri/` | Tauri 原生外壳、托盘和应用打包配置 |
+| `test/` | 单元测试、集成测试和浏览器回归测试 |
+
+## 更新与发布
+
+项目的更新清单位于 `update-manifest.json`，默认从 AntigravityPlusPlus 自己的 `main` 分支读取经过校验的字典和运行时资源。原生外壳更新需要下载新的完整应用包；后台和界面资源可以通过热更新获取。
+
+正式构建由 GitHub Actions 完成，流程会执行 JavaScript 检查、完整测试、浏览器回归测试和 Tauri 多平台构建。
+
+## 贡献
+
+欢迎提交 Issue、改进建议和代码贡献。提交代码前请运行：
+
+```bash
+npm run check
+npm test
+```
+
+涉及界面、启动流程或额度显示的改动，请同时说明测试平台、Antigravity 目标类型和复现步骤。
 
 ## 致谢
 
-- 汉化词典来源于社区整理，包括 [nicktan @ linux.do](https://linux.do/t/topic/2896116)。
-- 上下文监控相关实现参考 [Antigrative Dashboard / AG Pulse](https://github.com/YOU-SHOULD-KNOW-ME/antigrative-dashboard)（MIT 协议）。
+本项目在 EasyAntigravity Lite 的基础上继续开发；相关第三方代码与许可见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
 
-AntigravityPlusPlus 为独立社区项目，与 Google 官方无关。使用 [MIT License](LICENSE)，第三方声明见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+## 许可证
+
+AntigravityPlusPlus 使用 [MIT License](LICENSE) 发布。
+
+本项目与 Google 官方无关。使用前请遵守相关软件、服务和所在地区的适用条款。
