@@ -159,16 +159,18 @@ namespace EasyAGResident {
                     uint pId = 0;
                     GetWindowThreadProcessId(hWnd, out pId);
 
-                    // Find EasyAntigravity
-                    if (c == "Tauri Window" || (t == "EasyAntigravity" && (eaPid == 0 || pId == eaPid))) {
+                    bool isLauncherTitle = t == "EasyAntigravity" || t == "Antigravity++" || t == "Antigravity++ Lite";
+
+                    // Find Antigravity++
+                    if (c == "Tauri Window" || (isLauncherTitle && (eaPid == 0 || pId == eaPid))) {
                         eaHwnd = hWnd;
                     }
 
                     // Find Antigravity:
                     // 1. Must be Chrome_WidgetWin_1 (main viewport), never 0 or utility
-                    // 2. Not EasyAntigravity process or window
+                    // 2. Not Antigravity++ process or window
                     // 3. Must be visible, non-empty title, and substantial size
-                    if (c == "Chrome_WidgetWin_1" && pId != eaPid && t != "EasyAntigravity" && t != "Hidden Window" && !string.IsNullOrEmpty(t)) {
+                    if (c == "Chrome_WidgetWin_1" && pId != eaPid && !isLauncherTitle && t != "Hidden Window" && !string.IsNullOrEmpty(t)) {
                         bool isAg = false;
                         if (agPid != 0 && pId == agPid) isAg = true;
                         else {
@@ -279,7 +281,7 @@ namespace EasyAGResident {
                 };
 
                 trayIcon = new NotifyIcon();
-                trayIcon.Text = "EasyAntigravity (后台运行中)";
+                trayIcon.Text = "Antigravity++ (后台运行中)";
                 trayIcon.ContextMenuStrip = trayMenu;
 
                 // Load Icon
@@ -313,7 +315,7 @@ namespace EasyAGResident {
         private static void InitCapsuleWindow() {
             try {
                 capsuleWin = new Window {
-                    Title = "EasyAG_HUD_Capsule",
+                    Title = "Antigravity++_HUD_Capsule",
                     Width = 390,
                     Height = 200,
                     WindowStyle = WindowStyle.None,

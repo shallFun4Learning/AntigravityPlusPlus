@@ -204,8 +204,8 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
       : '上下文估算暂不可用，点击查看详情');
     button.dataset.tone = percentage >= 90 ? 'high' : percentage >= 75 ? 'medium' : 'normal';
     button.title = percentage !== null
-      ? `AntigravityPlusPlus 上下文估算 ${percentage}%${resolvedEndpoint ? ' · ' + resolvedEndpoint : ''} · 点击查看详情`
-      : 'AntigravityPlusPlus 上下文估算暂不可用 · 点击查看详情';
+      ? `Antigravity++ 上下文估算 ${percentage}%${resolvedEndpoint ? ' · ' + resolvedEndpoint : ''} · 点击查看详情`
+      : 'Antigravity++ 上下文估算暂不可用 · 点击查看详情';
     shadow.getElementById('usage').textContent = context
       ? `${compact(context.usedTokens)} / ${context.maxTokens === null ? '容量未知' : compact(context.maxTokens)} tokens` : '暂不可用';
     const domModel = typeof composer?.anchor?.textContent === 'string' ? composer.anchor.textContent.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
@@ -236,8 +236,8 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
       : `当前模型剩余用量 ${quotaPercent}%，点击查看详情`);
     quotaButton.dataset.state = quotaPercent === null ? 'unknown' : 'live';
     quotaButton.title = quotaPercent === null
-      ? 'AntigravityPlusPlus 模型用量暂不可用 · 点击查看详情'
-      : `AntigravityPlusPlus 当前模型剩余用量 ${quotaPercent}% · 点击查看详情`;
+      ? 'Antigravity++ 模型用量暂不可用 · 点击查看详情'
+      : `Antigravity++ 当前模型剩余用量 ${quotaPercent}% · 点击查看详情`;
     const quotaFill = shadow.getElementById('quota-fill');
     const quotaFillFraction = quotaPercent === 0 ? 0 : quota.remainingFraction;
     if (quotaFill) quotaFill.style.strokeDashoffset = String(62.832 * (1 - (quotaFillFraction ?? 0)));
@@ -275,7 +275,7 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
         )
       )
     ));
-    shadow.appendChild(make("section", {"id": "details", "class": "card", "role": "region", "aria-label": "AntigravityPlusPlus 上下文详情", "hidden": ""},
+    shadow.appendChild(make("section", {"id": "details", "class": "card", "role": "region", "aria-label": "Antigravity++ 上下文详情", "hidden": ""},
       make("div", {"class": "head"},
         make("strong", {}, "上下文估算"),
         make("button", {"id": "close", "type": "button", "aria-label": "关闭详情"}, "×")
@@ -306,7 +306,7 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
       make("p", {"class": "note", "id": "updated"}),
       make("p", {"class": "note"}, "占用可能在压缩后下降；百分比不代表模型能记住多少内容。")
     ));
-    shadow.appendChild(make("section", {"id": "quota-details", "class": "card", "role": "region", "aria-label": "AntigravityPlusPlus 模型用量", "hidden": ""},
+    shadow.appendChild(make("section", {"id": "quota-details", "class": "card", "role": "region", "aria-label": "Antigravity++ 模型用量", "hidden": ""},
       make("div", {"class": "head"},
         make("strong", {}, "用量"),
         make("button", {"id": "quota-close", "type": "button", "aria-label": "关闭用量详情"}, "×")

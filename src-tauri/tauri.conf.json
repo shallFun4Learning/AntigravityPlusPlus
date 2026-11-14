@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "AntigravityPlusPlus",
+  "productName": "Antigravity++",
   "version": "4.0.5",
   "identifier": "com.antigravityplusplus.launcher.tauri",
   "build": {
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "AntigravityPlusPlus Lite",
+        "title": "Antigravity++ Lite",
         "width": 450,
         "height": 560,
         "minWidth": 380,

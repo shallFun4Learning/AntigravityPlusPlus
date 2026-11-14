@@ -1,4 +1,4 @@
-# EasyAG / version.dll 全量诊断脚本
+# Antigravity++ / version.dll 全量诊断脚本
 # 用法: 右键 → 使用 PowerShell 运行
 # 输出: dll-diagnostic-<版本号>-<时间戳>.log
 
@@ -36,11 +36,11 @@ function Write-Section($title) {
 }
 
 # 开始采集
-Write-Host "EasyAG DLL 全量诊断" -ForegroundColor Cyan
+Write-Host "Antigravity++ DLL 全量诊断" -ForegroundColor Cyan
 Write-Host "输出文件: $logFile" -ForegroundColor Yellow
 Write-Host ""
 
-Add-Content -Path $logFile -Value "EasyAG DLL Diagnostic Report" -Encoding UTF8
+Add-Content -Path $logFile -Value "Antigravity++ DLL Diagnostic Report" -Encoding UTF8
 Add-Content -Path $logFile -Value "Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -Encoding UTF8
 Add-Content -Path $logFile -Value "Machine: $env:COMPUTERNAME" -Encoding UTF8
 Add-Content -Path $logFile -Value "User: $env:USERNAME" -Encoding UTF8
@@ -192,14 +192,14 @@ if ($agProcs) {
     Write-Log "  (无 Antigravity 进程)"
 }
 
-Write-Log "`n--- EasyAG 相关进程 ---"
-$easyProcs = Get-Process -Name "node","easyag-node","EasyAntigravity" -ErrorAction SilentlyContinue
+Write-Log "`n--- Antigravity++ 相关进程 ---"
+$easyProcs = Get-Process -Name "node","easyag-node","EasyAntigravity","AntigravityPlusPlus" -ErrorAction SilentlyContinue
 if ($easyProcs) {
     $easyProcs | ForEach-Object {
         Write-Log "  $($_.ProcessName) PID=$($_.Id) 启动时间=$($_.StartTime)"
     }
 } else {
-    Write-Log "  (无 EasyAG 进程)"
+    Write-Log "  (无 Antigravity++ 进程)"
 }
 
 # ==================== 6. 启动 AG 并捕获 ====================

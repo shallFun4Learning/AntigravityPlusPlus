@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logo-128.png" width="80" alt="AntigravityPlusPlus">
+  <img src="assets/logo-128.png" width="80" alt="Antigravity++">
 </p>
 
-<h1 align="center">AntigravityPlusPlus</h1>
+# Antigravity++
 
 <p align="center">面向 Antigravity 桌面端与 IDE 的独立 Lite 启动器</p>
 
@@ -13,11 +13,11 @@
 
 [中文](README.md) · [English](README.en.md)
 
-AntigravityPlusPlus 是一个独立维护的 Lite 启动器，为 Antigravity 桌面端和 IDE 提供本地代理配置、可逆界面汉化、上下文监控和模型额度监控。项目不提供代理节点，也不会修改 Antigravity 的安装包。
+Antigravity++ 是一个独立维护的 Lite 启动器，为 Antigravity 桌面端和 IDE 提供本地代理配置、可逆界面汉化、上下文监控和模型额度监控。项目不提供代理节点，也不会修改 Antigravity 的安装包。
 
 ## 项目定位
 
-AntigravityPlusPlus 将启动、进程管理和界面增强集中在一个轻量应用中：
+Antigravity++ 将启动、进程管理和界面增强集中在一个轻量应用中：
 
 - 通过免 TUN 进程代理连接用户自己的本地代理。
 - 在桌面端和 IDE 之间选择启动目标，并自动检测安装路径。
@@ -102,7 +102,7 @@ Intel macOS 使用 `x86_64-apple-darwin`，Windows 使用 `x86_64-pc-windows-msv
 
 ## 更新与发布
 
-项目的更新清单位于 `update-manifest.json`，默认从 AntigravityPlusPlus 自己的 `main` 分支读取经过校验的字典和运行时资源。原生外壳更新需要下载新的完整应用包；后台和界面资源可以通过热更新获取。
+项目的更新清单位于 `update-manifest.json`，默认从 Antigravity++ 自己的 `main` 分支读取经过校验的字典和运行时资源。原生外壳更新需要下载新的完整应用包；后台和界面资源可以通过热更新获取。
 
 正式构建由 GitHub Actions 完成，流程会执行 JavaScript 检查、完整测试、浏览器回归测试和 Tauri 多平台构建。
 
@@ -125,6 +125,6 @@ npm test
 
 ## 许可证
 
-AntigravityPlusPlus 使用 [MIT License](LICENSE) 发布。
+Antigravity++ 使用 [MIT License](LICENSE) 发布。
 
 本项目与 Google 官方无关。使用前请遵守相关软件、服务和所在地区的适用条款。

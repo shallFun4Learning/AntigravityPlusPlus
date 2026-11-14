@@ -1,19 +1,19 @@
 ## 应对 AG 退出后的后台进程残留
 
-**本次重点：AG 窗口已经关闭，却因 sidecar 等后台进程残留而无法再次启动时，可以直接在 AntigravityPlusPlus 中处理。**
+**本次重点：AG 窗口已经关闭，却因 sidecar 等后台进程残留而无法再次启动时，可以直接在 Antigravity++ 中处理。**
 
 我们在 Windows 的 Antigravity 2.31.0 上复现了退出后 sidecar 未回收、多次开关后持续累积的情况；直接使用 TUN 启动也能复现。
 
-AntigravityPlusPlus 检测到已有进程时，会显示专用弹窗，提供 **“清理并重新启动”**。如果界面已经显示“运行中”，点击原启动按钮也能打开处理窗口，无需重启电脑或手动寻找 PID。
+Antigravity++ 检测到已有进程时，会显示专用弹窗，提供 **“清理并重新启动”**。如果界面已经显示“运行中”，点击原启动按钮也能打开处理窗口，无需重启电脑或手动寻找 PID。
 
-清理前请保存 AG 中的工作，并确认没有需要保留的后台任务。操作会结束当前用户、所选安装路径对应的 AG 进程；确认退出后再重新启动，清理失败则停止后续启动。AntigravityPlusPlus 不会自动清理进程。这是对 AG 退出行为的兼容处理，AG 自身的回收问题仍需上游修复。
+清理前请保存 AG 中的工作，并确认没有需要保留的后台任务。操作会结束当前用户、所选安装路径对应的 AG 进程；确认退出后再重新启动，清理失败则停止后续启动。Antigravity++ 不会自动清理进程。这是对 AG 退出行为的兼容处理，AG 自身的回收问题仍需上游修复。
 
 感谢 [shallFun4Learning](https://github.com/shallFun4Learning) 提交 [PR #18](https://github.com/DSDS-CMHL/EasyAntigravity/pull/18) 提供方案和复现信息；本次在其原始提交上调整后合并，保留贡献记录。
 
 ## 如何升级
 
-- **已有 Windows / macOS Lite 用户**：点击顶栏 **“检查更新”**，完成后从托盘或菜单栏彻底退出 AntigravityPlusPlus，再重新打开。此次功能更新可通过热更新获取。
-- 如果更新按钮无法使用，请下载对应平台的完整包，退出 AntigravityPlusPlus 后替换。macOS 用户如果还需要此前的 Dock 图标修复，仍需更换完整应用。
+- **已有 Windows / macOS Lite 用户**：点击顶栏 **“检查更新”**，完成后从托盘或菜单栏彻底退出 Antigravity++，再重新打开。此次功能更新可通过热更新获取。
+- 如果更新按钮无法使用，请下载对应平台的完整包，退出 Antigravity++ 后替换。macOS 用户如果还需要此前的 Dock 图标修复，仍需更换完整应用。
 
 <details>
 <summary>其他更新（点击展开）</summary>

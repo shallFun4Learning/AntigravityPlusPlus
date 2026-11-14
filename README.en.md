@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logo-128.png" width="80" alt="AntigravityPlusPlus">
+  <img src="assets/logo-128.png" width="80" alt="Antigravity++">
 </p>
 
-<h1 align="center">AntigravityPlusPlus</h1>
+# Antigravity++
 
 <p align="center">An independent Lite launcher for Antigravity desktop and IDE clients</p>
 
@@ -13,11 +13,11 @@
 
 [English](README.en.md) · [中文](README.md)
 
-AntigravityPlusPlus is an independently maintained Lite launcher for Antigravity desktop and IDE clients. It provides local proxy configuration, reversible interface localization, context monitoring, and model quota monitoring without modifying the Antigravity installation or providing proxy nodes.
+Antigravity++ is an independently maintained Lite launcher for Antigravity desktop and IDE clients. It provides local proxy configuration, reversible interface localization, context monitoring, and model quota monitoring without modifying the Antigravity installation or providing proxy nodes.
 
 ## Project scope
 
-AntigravityPlusPlus brings launching, process handling, and interface enhancements into one lightweight application:
+Antigravity++ brings launching, process handling, and interface enhancements into one lightweight application:
 
 - Configure a per-process proxy using the user's own local proxy.
 - Select between the Antigravity desktop client and IDE, with automatic installation discovery.
@@ -102,7 +102,7 @@ Use `x86_64-apple-darwin` for Intel macOS and `x86_64-pc-windows-msvc` for Windo
 
 ## Updates and releases
 
-The update manifest is stored in `update-manifest.json`. By default, it reads verified dictionaries and runtime resources from the `main` branch of AntigravityPlusPlus. Native shell changes require a new full application package; backend and interface resources can be delivered through hot updates.
+The update manifest is stored in `update-manifest.json`. By default, it reads verified dictionaries and runtime resources from the `main` branch of Antigravity++. Native shell changes require a new full application package; backend and interface resources can be delivered through hot updates.
 
 The GitHub Actions build verifies JavaScript modules, runs the full test suite, executes browser regression tests, and builds the Tauri application for supported platforms.
 
@@ -125,6 +125,6 @@ For changes involving the interface, launch flow, or quota display, include the 
 
 ## License
 
-AntigravityPlusPlus is released under the [MIT License](LICENSE).
+Antigravity++ is released under the [MIT License](LICENSE).
 
 This project is not affiliated with Google. Use it in accordance with the applicable terms of the related software and services.

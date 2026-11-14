@@ -8,7 +8,7 @@ Reference commit: 899a7984edbd43cc7a366a67936e80d30c2050cd
 
 Process/socket parsing and local composer geometry checks in
 `adapters/desktop/language-service-discovery.js` and `features/context-widget.js`
-are adapted from this project. AntigravityPlusPlus does not bundle its installer, SDK or plugin runtime.
+are adapted from this project. Antigravity++ does not bundle its installer, SDK or plugin runtime.
 
 MIT License
 

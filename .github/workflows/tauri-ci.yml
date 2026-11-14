@@ -98,7 +98,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/AntigravityPlusPlus.app"
+          app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/Antigravity++.app"
           test -f "$app/Contents/Resources/backend/server.js"
           test -f "$app/Contents/Resources/backend/node_modules/ws/package.json"
           test -x "$app/Contents/MacOS/easyag-node"
@@ -106,7 +106,7 @@ jobs:
           # 1. 对 easyag-node 补充 Hardened Runtime 与 JIT 权限 (解决 Apple Silicon V8 ThreadIsolation SIGTRAP 退出码 133)
           codesign --force --options runtime --sign - --entitlements src-tauri/Entitlements.plist "$app/Contents/MacOS/easyag-node"
 
-          # 2. 对整个 AntigravityPlusPlus.app 补充 Entitlements 签名
+          # 2. 对整个 Antigravity++.app 补充 Entitlements 签名
           codesign --force --options runtime --deep --sign - --entitlements src-tauri/Entitlements.plist "$app"
 
           # 3. 校验签名与 JIT 权限输出
@@ -129,10 +129,10 @@ jobs:
           verify_dir="dist-tauri/verify"
           mkdir -p "$verify_dir"
           ditto -x -k "$zip_path" "$verify_dir/"
-          test -d "$verify_dir/AntigravityPlusPlus.app"
-          test -x "$verify_dir/AntigravityPlusPlus.app/Contents/MacOS/AntigravityPlusPlus"
-          test -x "$verify_dir/AntigravityPlusPlus.app/Contents/MacOS/easyag-node"
-          test -f "$verify_dir/AntigravityPlusPlus.app/Contents/Resources/backend/server.js"
+          test -d "$verify_dir/Antigravity++.app"
+          test -x "$verify_dir/Antigravity++.app/Contents/MacOS/Antigravity++"
+          test -x "$verify_dir/Antigravity++.app/Contents/MacOS/easyag-node"
+          test -f "$verify_dir/Antigravity++.app/Contents/Resources/backend/server.js"
           rm -rf "$verify_dir"
 
           # 8. 输出 SHA256 校验和到日志

@@ -37,7 +37,7 @@ class Session {
   }
 
   async launch() {
-    if (this.closed) return { ok: false, error: 'AntigravityPlusPlus 正在退出' };
+    if (this.closed) return { ok: false, error: 'Antigravity++ 正在退出' };
     if (this.phase === 'running') return { ok: true, alreadyRunning: true };
     if (['preparing', 'launching', 'cleaning'].includes(this.phase)) return { ok: false, error: '正在启动，请稍候' };
     const generation = ++this.generation;

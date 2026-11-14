@@ -2,7 +2,7 @@
   "name": "antigravityplusplus",
   "version": "4.0.5",
   "edition": "lite",
-  "description": "AntigravityPlusPlus Lite launcher: process proxy, reversible localization and context and quota rings",
+  "description": "Antigravity++ Lite launcher: process proxy, reversible localization and context and quota rings",
   "main": "server.js",
   "bin": "server.js",
   "scripts": {
