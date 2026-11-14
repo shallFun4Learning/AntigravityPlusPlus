@@ -119,7 +119,9 @@ For changes involving the interface, launch flow, or quota display, include the 
 
 ## Acknowledgements
 
-This project continues development on the Lite foundation of EasyAntigravity; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for third-party code and license information.
+- This project continues development on the Lite foundation of [EasyAntigravity Lite](https://github.com/DSDS-CMHL/EasyAntigravity); see [THIRD-PARTY-NOTICES.md](https://github.com/shallFun4Learning/AntigravityPlusPlus/blob/main/THIRD-PARTY-NOTICES.md) for third-party code and license information.
+- The localization dictionary builds on community-maintained work, including [nicktan @ linux.do](https://linux.do/t/topic/2896116).
+- The context-monitoring implementation references [Antigrative Dashboard / AG Pulse](https://github.com/YOU-SHOULD-KNOW-ME/antigrative-dashboard), with the relevant material under the MIT License.
 
 ## License
 

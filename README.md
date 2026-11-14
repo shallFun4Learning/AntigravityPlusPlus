@@ -119,7 +119,9 @@ npm test
 
 ## 致谢
 
-本项目在 EasyAntigravity Lite 的基础上继续开发；相关第三方代码与许可见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+- 本项目在 [EasyAntigravity Lite](https://github.com/DSDS-CMHL/EasyAntigravity) 的基础上继续开发；相关第三方代码与许可见 [THIRD-PARTY-NOTICES.md](https://github.com/shallFun4Learning/AntigravityPlusPlus/blob/main/THIRD-PARTY-NOTICES.md)。
+- 汉化词典感谢社区整理与维护，其中包括 [nicktan @ linux.do](https://linux.do/t/topic/2896116)。
+- 上下文监控相关实现参考 [Antigrative Dashboard / AG Pulse](https://github.com/YOU-SHOULD-KNOW-ME/antigrative-dashboard)，相关部分遵循 MIT 协议。
 
 ## 许可证
 
