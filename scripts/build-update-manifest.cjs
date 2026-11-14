@@ -5,7 +5,7 @@ const { DICT_FILES } = require('../features/i18n');
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-const baseUrl = process.env.EASYAG_MANIFEST_BASE_URL || 'https://raw.githubusercontent.com/DSDS-CMHL/EasyAntigravity/main/';
+const baseUrl = process.env.EASYAG_MANIFEST_BASE_URL || 'https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/';
 const dictVersion = process.env.EASYAG_DICT_VERSION || `${new Date().toISOString().slice(0, 10)}-hotfix1`;
 
 function readLfBuffer(filePath) {

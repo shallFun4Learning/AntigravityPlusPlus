@@ -1,4 +1,4 @@
-# EasyAntigravity 更新日志
+# AntigravityPlusPlus 更新日志
 
 ## 未发布
 
@@ -15,7 +15,7 @@
 - 新增 238 条汉化，总计 3376 条，跟进 AG 2.31 设置、权限、浏览器、语音及快捷键，并支持额度倒计时等动态文案。
 - 圆环详情新增端点模型标识，区分采样名称与接口返回的标识，取不到时显示“—”。
 - Mac ARM 使用 macOS 15 构建环境；此次复用已验证原生构建，更新后台后重新签名、打包和验证。
-- Windows / macOS Lite 用户均可热更新获取本次功能，完成后需彻底退出 EasyAG 并重开。
+- Windows / macOS Lite 用户均可热更新获取本次功能，完成后需彻底退出 AntigravityPlusPlus 并重开。
 
 详细说明见 [4.0.5 发布说明](docs/RELEASE-v4.0.5.md)。
 

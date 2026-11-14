@@ -134,7 +134,7 @@ function createApplication({ rootDir, dataDir, native = false, testMode = false,
     },
     async start() {
       const port = await api.listen(native ? 0 : 19823);
-      events.log('SYSTEM', `EasyAG 桌面内核就绪，已载入 ${Object.keys(dictionary).length} 条汉化词条`, 'tag-proxy');
+      events.log('SYSTEM', `AntigravityPlusPlus 桌面内核就绪，已载入 ${Object.keys(dictionary).length} 条汉化词条`, 'tag-proxy');
       if (process.env.EASYAG_READY_FILE) writeJson(process.env.EASYAG_READY_FILE, { port, pid: process.pid });
       if (!native && !testMode) host.open(`http://127.0.0.1:${port}`);
       void session.attachExisting().catch(error => events.log('SYSTEM', error.message, 'tag-warn'));

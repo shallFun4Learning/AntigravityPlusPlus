@@ -1,8 +1,8 @@
 [package]
-name = "easyantigravity"
+name = "antigravityplusplus"
 version = "4.0.5"
 edition = "2021"
-description = "EasyAntigravity Lite - TUN-free process proxy, reversible DOM localization and context ring"
+description = "AntigravityPlusPlus Lite - TUN-free process proxy, reversible DOM localization and context and quota rings"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -17,5 +17,5 @@ serde_json = "1"
 custom-protocol = ["tauri/custom-protocol"]
 
 [[bin]]
-name = "easyantigravity"
+name = "antigravityplusplus"
 path = "src/main.rs"

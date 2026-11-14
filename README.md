@@ -1,16 +1,16 @@
 <p align="center">
-  <img src="assets/logo-128.png" width="80" alt="EasyAG">
+  <img src="assets/logo-128.png" width="80" alt="AntigravityPlusPlus">
 </p>
 
-<h1 align="center">EasyAG Lite</h1>
+<h1 align="center">AntigravityPlusPlus Lite</h1>
 
 <p align="center">免 TUN 代理 · 可逆界面汉化 · 上下文与模型用量圆环</p>
 
-EasyAG 是 Antigravity 的轻量启动器，支持桌面版与 IDE 启动选择。当前发行版本为 **4.0.5 Lite**，完整更新内容见 [发布说明](docs/RELEASE-v4.0.5.md)。
+AntigravityPlusPlus 是 Antigravity 的独立轻量启动器，支持桌面版与 IDE 启动选择。当前发行版本为 **4.0.5 Lite**，完整更新内容见 [发布说明](docs/RELEASE-v4.0.5.md)。
 
 ## 功能
 
-- **免 TUN 代理**：启动时向程序传入本地代理配置，支持常用端口和自定义端口。直连环境可关闭；EasyAG 不提供代理节点。
+- **免 TUN 代理**：启动时向程序传入本地代理配置，支持常用端口和自定义端口。直连环境可关闭；AntigravityPlusPlus 不提供代理节点。
 - **进程冲突恢复**：已有 AG 进程阻止启动时，在弹窗中选择清理并重新启动；运行中点击原启动按钮也能打开。请先保存工作。
 - **启动目标选择**：在桌面版与 IDE 版间切换，自动寻找安装位置。找不到程序时才弹出路径设置，支持手动输入、浏览选择、保存及恢复默认。
 - **可逆界面汉化**：桌面版通过 CDP 动态翻译界面，关闭开关后恢复原文，不修改安装包。
@@ -22,14 +22,14 @@ EasyAG 是 Antigravity 的轻量启动器，支持桌面版与 IDE 启动选择�
 
 ## 下载与使用
 
-1. 在 [Releases](https://github.com/DSDS-CMHL/EasyAntigravity/releases) 下载对应系统的完整包。
-2. Windows 完整解压后运行 `EasyAntigravity.exe`，保留同目录 `easyag-node.exe` 和 `backend` 文件夹；macOS 解压后打开应用。
+1. 在 [Releases](https://github.com/shallFun4Learning/AntigravityPlusPlus/releases) 下载对应系统的完整包。
+2. Windows 完整解压后运行 `AntigravityPlusPlus.exe`，保留同目录 `easyag-node.exe` 和 `backend` 文件夹；macOS 解压后打开应用。
 3. 打开自己的代理客户端，选择对应 HTTP / Mixed 端口，或关闭免 TUN 代理使用直连。
-4. 选择桌面版或 IDE，点击启动。若程序已经打开，请保存工作并退出，再通过 EasyAG 启动。
+4. 选择桌面版或 IDE，点击启动。若程序已经打开，请保存工作并退出，再通过 AntigravityPlusPlus 启动。
 
-从托盘或顶部菜单栏选择“退出应用”可彻底退出 EasyAG。详细使用方式见 [便携版说明](docs/PORTABLE.md)。
+从托盘或顶部菜单栏选择“退出应用”可彻底退出 AntigravityPlusPlus。详细使用方式见 [便携版说明](docs/PORTABLE.md)。
 
-已有 Windows Lite 版用户可点击“检查更新”，完成后从托盘彻底退出 EasyAG 再打开，无需重新下载。
+已有 Windows Lite 版用户可点击“检查更新”，完成后从托盘彻底退出 AntigravityPlusPlus 再打开，无需重新下载。
 
 macOS Apple Silicon / Intel 包仍为 Beta，未经过 Apple 公证。要获得 Dock 修复，需要下载完整包并替换整个应用。本次后台、界面与词典更新也支持 macOS Lite 热更新；检查更新按钮无法使用时，请下载完整包。
 
@@ -39,7 +39,7 @@ macOS Apple Silicon / Intel 包仍为 Beta，未经过 Apple 公证。要获得 
 
 ## 版本说明
 
-当前 Lite 版专注代理、汉化与上下文监控。Turbo Pilot、ARES 风险提示等历史功能属于 [v3.2.4](https://github.com/DSDS-CMHL/EasyAntigravity/releases/tag/v3.2.4)，代码保留在 `v3-pilot` 分支。
+当前 Lite 版专注代理、汉化与上下文监控。Turbo Pilot、ARES 风险提示等历史功能属于原项目的早期版本，当前独立项目不继续维护这些历史分支。
 
 ## 开发
 
@@ -65,4 +65,4 @@ npm run test:launcher:browser -- "浏览器可执行文件的完整路径"
 - 汉化词典来源于社区整理，包括 [nicktan @ linux.do](https://linux.do/t/topic/2896116)。
 - 上下文监控相关实现参考 [Antigrative Dashboard / AG Pulse](https://github.com/YOU-SHOULD-KNOW-ME/antigrative-dashboard)（MIT 协议）。
 
-EasyAG 为独立社区项目，与 Google 官方无关。使用 [MIT License](LICENSE)，第三方声明见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+AntigravityPlusPlus 为独立社区项目，与 Google 官方无关。使用 [MIT License](LICENSE)，第三方声明见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。

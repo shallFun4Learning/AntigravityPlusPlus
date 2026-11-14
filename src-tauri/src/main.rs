@@ -98,7 +98,7 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     )?;
 
     let mut builder = TrayIconBuilder::with_id("easyag-tray")
-        .tooltip("EasyAntigravity Lite")
+        .tooltip("AntigravityPlusPlus Lite")
         .menu(&menu)
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -275,7 +275,7 @@ fn main() {
             let _ = setup_tray(app);
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_title("EasyAntigravity Lite (macOS)");
+                let _ = window.set_title("AntigravityPlusPlus Lite (macOS)");
             }
             let handle = app.handle().clone();
             std::thread::spawn(move || match start_backend(&handle) {
@@ -290,7 +290,7 @@ fn main() {
                 Err(error) => {
                     stop_backend(&handle.state::<Backend>());
                     if let Some(window) = handle.get_webview_window("main") {
-                        let message = format!("EasyAG 启动失败：{error}");
+                        let message = format!("AntigravityPlusPlus 启动失败：{error}");
                         let _ = window.eval(&format!(
                             "document.body.textContent = {}",
                             serde_json::to_string(&message).unwrap()
@@ -310,7 +310,7 @@ fn main() {
             }
         })
         .build(tauri::generate_context!())
-        .expect("Failed to build EasyAG")
+        .expect("Failed to build AntigravityPlusPlus")
         .run(|app, event| match event {
             RunEvent::Exit => {
                 stop_backend(&app.state::<Backend>());

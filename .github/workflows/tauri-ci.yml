@@ -2,7 +2,7 @@ name: Tauri Build
 
 on:
   push:
-    branches: [main, v3-pilot]
+    branches: [main]
   workflow_dispatch:
   workflow_call:
 
@@ -74,11 +74,11 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $name = 'EasyAntigravity-4.0.5-lite-windows-x64'
+          $name = 'AntigravityPlusPlus-4.0.5-lite-windows-x64'
           $stage = Join-Path 'dist-tauri' $name
           New-Item -ItemType Directory -Path $stage | Out-Null
           $release = 'src-tauri/target/${{ matrix.target }}/release'
-          Copy-Item -LiteralPath "$release/easyantigravity.exe" -Destination "$stage/EasyAntigravity.exe"
+          Copy-Item -LiteralPath "$release/antigravityplusplus.exe" -Destination "$stage/AntigravityPlusPlus.exe"
           Copy-Item -LiteralPath 'src-tauri/binaries/easyag-node-${{ matrix.target }}.exe' -Destination "$stage/easyag-node.exe"
           Copy-Item -LiteralPath 'src-tauri/backend' -Destination "$stage/backend" -Recurse
           Get-ChildItem -LiteralPath $release -Filter '*.dll' -File | Copy-Item -Destination $stage
@@ -86,7 +86,7 @@ jobs:
           Compress-Archive -LiteralPath $stage -DestinationPath "$name.zip"
           Expand-Archive -LiteralPath "$name.zip" -DestinationPath 'dist-tauri/verify'
           $extracted = (Resolve-Path "dist-tauri/verify/$name").Path
-          foreach ($file in @('EasyAntigravity.exe','easyag-node.exe','backend/server.js','backend/index.html','backend/dicts/common.json','backend/dicts/ui_v2.json','backend/package.json','backend/node_modules/ws/package.json','backend/NODE-LICENSE.txt')) {
+          foreach ($file in @('AntigravityPlusPlus.exe','easyag-node.exe','backend/server.js','backend/index.html','backend/dicts/common.json','backend/dicts/ui_v2.json','backend/package.json','backend/node_modules/ws/package.json','backend/NODE-LICENSE.txt')) {
             if (-not (Test-Path -LiteralPath (Join-Path $extracted $file))) { throw "Missing portable resource: $file" }
           }
           $env:EASYAG_TEST_NODE = Join-Path $extracted 'easyag-node.exe'
@@ -98,7 +98,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/EasyAntigravity.app"
+          app="src-tauri/target/${{ matrix.target }}/release/bundle/macos/AntigravityPlusPlus.app"
           test -f "$app/Contents/Resources/backend/server.js"
           test -f "$app/Contents/Resources/backend/node_modules/ws/package.json"
           test -x "$app/Contents/MacOS/easyag-node"
@@ -106,7 +106,7 @@ jobs:
           # 1. 对 easyag-node 补充 Hardened Runtime 与 JIT 权限 (解决 Apple Silicon V8 ThreadIsolation SIGTRAP 退出码 133)
           codesign --force --options runtime --sign - --entitlements src-tauri/Entitlements.plist "$app/Contents/MacOS/easyag-node"
 
-          # 2. 对整个 EasyAntigravity.app 补充 Entitlements 签名
+          # 2. 对整个 AntigravityPlusPlus.app 补充 Entitlements 签名
           codesign --force --options runtime --deep --sign - --entitlements src-tauri/Entitlements.plist "$app"
 
           # 3. 校验签名与 JIT 权限输出
@@ -118,7 +118,7 @@ jobs:
 
           # 5. 打包分发 ZIP 包（保持 macOS 扩展属性、代码签名与完整 App 外壳）
           mkdir -p dist-tauri
-          zip_name="EasyAntigravity-4.0.5-lite-${{ matrix.name }}-beta.zip"
+          zip_name="AntigravityPlusPlus-4.0.5-lite-${{ matrix.name }}-beta.zip"
           zip_path="dist-tauri/$zip_name"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
 
@@ -129,10 +129,10 @@ jobs:
           verify_dir="dist-tauri/verify"
           mkdir -p "$verify_dir"
           ditto -x -k "$zip_path" "$verify_dir/"
-          test -d "$verify_dir/EasyAntigravity.app"
-          test -x "$verify_dir/EasyAntigravity.app/Contents/MacOS/EasyAntigravity"
-          test -x "$verify_dir/EasyAntigravity.app/Contents/MacOS/easyag-node"
-          test -f "$verify_dir/EasyAntigravity.app/Contents/Resources/backend/server.js"
+          test -d "$verify_dir/AntigravityPlusPlus.app"
+          test -x "$verify_dir/AntigravityPlusPlus.app/Contents/MacOS/AntigravityPlusPlus"
+          test -x "$verify_dir/AntigravityPlusPlus.app/Contents/MacOS/easyag-node"
+          test -f "$verify_dir/AntigravityPlusPlus.app/Contents/Resources/backend/server.js"
           rm -rf "$verify_dir"
 
           # 8. 输出 SHA256 校验和到日志
@@ -141,23 +141,23 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: EasyAntigravity-4.0.5-lite-${{ matrix.name }}
-          path: EasyAntigravity-4.0.5-lite-windows-x64.zip
+          name: AntigravityPlusPlus-4.0.5-lite-${{ matrix.name }}
+          path: AntigravityPlusPlus-4.0.5-lite-windows-x64.zip
           if-no-files-found: error
           retention-days: 14
       - name: Upload macOS app (Beta)
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: EasyAntigravity-4.0.5-lite-${{ matrix.name }}-beta
-          path: dist-tauri/EasyAntigravity-4.0.5-lite-${{ matrix.name }}-beta.zip
+          name: AntigravityPlusPlus-4.0.5-lite-${{ matrix.name }}-beta
+          path: dist-tauri/AntigravityPlusPlus-4.0.5-lite-${{ matrix.name }}-beta.zip
           if-no-files-found: error
           retention-days: 14
       - name: Upload Standard Workflow Test Suite
         if: matrix.name == 'windows-x64'
         uses: actions/upload-artifact@v4
         with:
-          name: EasyAntigravity-4.0.5-lite-standard-workflow-test-suite
+          name: AntigravityPlusPlus-4.0.5-lite-standard-workflow-test-suite
           path: |
             test/
             core/
