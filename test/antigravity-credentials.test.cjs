@@ -139,12 +139,20 @@ test('system credential reader decodes macOS keychain payload', async () => {
   });
   const encoded = `go-keyring-base64:${Buffer.from(payload).toString('base64')}`;
   const credential = await readSystemCredential(async (command, args) => {
-    assert.equal(command, process.platform === 'darwin' ? 'security' : 'secret-tool');
-    assert.ok(args.includes(process.platform === 'darwin' ? 'gemini' : 'gemini'));
+    assert.equal(command, 'security');
+    assert.deepEqual(args, ['find-generic-password', '-s', 'gemini', '-a', 'antigravity', '-w']);
     return { stdout: encoded };
-  });
+  }, 'darwin');
   assert.equal(credential.email, 'keychain@example.com');
   assert.equal(credential.refreshToken, 'keychain-refresh');
+  assert.equal(credential.source, 'macOS 钥匙串');
+});
+
+test('Windows system credential reading fails without invoking Unix credential tools', async () => {
+  await assert.rejects(readSystemCredential(
+    async () => assert.fail('Windows must not execute security or secret-tool'),
+    'win32'
+  ), /当前平台暂不支持读取系统凭据/);
 });
 
 test('new state database format reads OAuth and separate user status rows', async t => {

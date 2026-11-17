@@ -1,5 +1,7 @@
 # Antigravity++ 0.1.0 便携版
 
+完整应用包从 [GitHub Releases](https://github.com/shallFun4Learning/AntigravityPlusPlus/releases) 下载，按系统与处理器选择对应 ZIP。主线自动构建会标记为预览版；每次发布附带 `SHA256SUMS.txt`，可校验下载文件完整性。
+
 Windows：完整解压发布包，运行 AntigravityPlusPlus.exe。保留同目录 antigravity-node.exe 和 backend 文件夹。无需自行安装 Node.js 或 Rust，外壳需要系统 WebView2 Runtime。
 
 macOS（Beta）：下载 Apple Silicon 或 Intel 对应的 ZIP，解压后打开 Antigravity++.app。未经过 Apple 公证。升级时替换整个应用，保留系统中的用户数据目录。

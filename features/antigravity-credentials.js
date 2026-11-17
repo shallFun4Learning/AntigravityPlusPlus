@@ -419,20 +419,20 @@ async function readFileCredentialsFromDir(geminiDir, fsImpl = fs) {
   throw new Error('未找到可读取的本地文件凭据');
 }
 
-async function readSystemCredential(runImpl = run) {
+async function readSystemCredential(runImpl = run, platform = process.platform) {
   let command;
   let args;
-  if (process.platform === 'darwin') {
+  if (platform === 'darwin') {
     command = 'security';
     args = ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-a', KEYCHAIN_ACCOUNT, '-w'];
-  } else if (process.platform === 'linux') {
+  } else if (platform === 'linux') {
     command = 'secret-tool';
     args = ['lookup', 'service', KEYCHAIN_SERVICE, 'username', KEYCHAIN_ACCOUNT];
   } else {
     throw new Error('当前平台暂不支持读取系统凭据');
   }
   const result = await runImpl(command, args, { timeout: 8000, maxBuffer: 4 * 1024 * 1024 });
-  const credential = parseCredentialPayload(result.stdout, process.platform === 'darwin' ? 'macOS 钥匙串' : 'Linux Secret Service');
+  const credential = parseCredentialPayload(result.stdout, platform === 'darwin' ? 'macOS 钥匙串' : 'Linux Secret Service');
   if (!credential) throw new Error('系统凭据格式无法识别');
   return credential;
 }

@@ -32,14 +32,24 @@ test('macOS process discovery ignores the manager when matching an Antigravity b
   };
   const stdout = [
     ' 123  501 Mon Nov 16 20:55:12 2026 /Applications/Antigravity.app/Contents/MacOS/Antigravity',
+    ' 124  502 Mon Nov 16 20:55:12 2026 /Applications/Antigravity.app/Contents/MacOS/Antigravity',
     ' 456  501 Tue Nov 17 01:07:09 2026 /Volumes/lenovo/easyanti/src-tauri/target/release/bundle/macos/Antigravity++.app/Contents/MacOS/antigravityplusplus',
     ' 457  501 Tue Nov 17 01:07:10 2026 /Volumes/lenovo/easyanti/src-tauri/target/release/bundle/macos/Antigravity++.app/Contents/MacOS/antigravity-node'
   ].join('\n');
   const rows = await listTargetProcesses(target, {
     platform: 'darwin',
+    uid: 501,
     execute: async () => ({ stdout })
   });
   assert.deepEqual(rows.map(row => row.pid), [123]);
+});
+
+test('macOS process discovery refuses to inspect processes without a verified user ID', async () => {
+  await assert.rejects(listTargetProcesses({}, {
+    platform: 'darwin',
+    uid: null,
+    execute: async () => assert.fail('An unverified user must not inspect or stop processes')
+  }), /无法确认当前用户/);
 });
 
 test('cleanup verifies termination, reports survivors and avoids reused PIDs', async () => {

@@ -75,6 +75,12 @@ Antigravity++ 是面向 Antigravity 桌面端与 IDE 的独立启动器。通过
 
 ## 使用方式
 
+### 下载已编译应用
+
+前往 [GitHub Releases](https://github.com/shallFun4Learning/AntigravityPlusPlus/releases)，选择 Windows x64、macOS Apple Silicon 或 macOS Intel 对应的 ZIP。Windows 完整解压后运行 `AntigravityPlusPlus.exe`；macOS 解压后打开 `Antigravity++.app`。macOS 包目前为 Beta，尚未经过 Apple 公证。
+
+每次发布同时提供 `SHA256SUMS.txt`，可用于校验下载文件。标有 **Pre-release** 的版本由主线自动构建，供体验和反馈。
+
 ### 从源码运行
 
 需要 Node.js 22 或更高版本：
@@ -94,6 +100,7 @@ npm test
 ```
 
 测试使用模拟接口和隔离数据目录，不会启动真实的 Antigravity 进程。
+数据库集成测试需要 `sqlite3` 命令；macOS 通常已自带，Windows 开发环境可通过 `choco install sqlite` 安装。GitHub Actions 会自动准备该依赖。
 
 ### 构建 macOS App
 
@@ -125,7 +132,13 @@ Intel macOS 使用 `x86_64-apple-darwin`，Windows 使用 `x86_64-pc-windows-msv
 
 项目的更新清单位于 `update-manifest.json`，默认从 Antigravity++ 自己的 `main` 分支读取经过校验的字典和运行时资源。原生外壳更新需要下载新的完整应用包；后台和界面资源可以通过热更新获取。
 
-正式构建由 GitHub Actions 完成，流程会执行 JavaScript 检查、完整测试、浏览器回归测试和 Tauri 多平台构建。
+构建与发布由 GitHub Actions 完成，流程会执行 JavaScript 检查、完整测试、浏览器回归测试和 Tauri 多平台构建。Windows x64、macOS Apple Silicon、macOS Intel 三个平台全部成功后，才会创建 Release 并附上完整应用包和 SHA-256 校验和；任何一个平台失败都会停止发布。
+
+- 推送到 `main`：自动发布 `v0.1.0-preview.<构建序号>` 形式的预览版，版本前缀取自当前 `package.json`。
+- 在 `main` 上手动运行工作流：同样构建并发布一个预览版。
+- 推送 `v<版本号>` 标签：自动发布对应版本；带 `beta` 等后缀的版本仍标为预览版。标签必须与 `package.json`、`package-lock.json`、Tauri 配置和 Cargo 中的版本一致。
+
+发布说明来自 `CHANGELOG.md` 对应版本。发布先在草稿中上传全部附件，完成后才公开；重跑工作流可继续未完成的草稿，已公开的版本会保留原有产物。
 
 ## 贡献
 

@@ -1,7 +1,7 @@
 {
   "edition": "plusplus",
   "version": "0.1.0",
-  "dictVersion": "2026-11-14-hotfix1",
+  "dictVersion": "2026-11-17-hotfix1",
   "dicts": {
     "ui_v2.json": {
       "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/dicts/ui_v2.json",
@@ -53,7 +53,7 @@
       },
       "features/antigravity-credentials.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/features/antigravity-credentials.js",
-        "sha256": "7e39ad7970511708e7c4203df77baa912c06d8d9acd77298046f9fda00876d62"
+        "sha256": "0913163819fce5b8f60cae3ae05383aa42259c225208c95752c9d7d822d80a1a"
       },
       "features/context-monitor.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/features/context-monitor.js",
@@ -109,7 +109,7 @@
       },
       "adapters/desktop/process-control.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/adapters/desktop/process-control.js",
-        "sha256": "ad3486ad58aaf827d2fc8b809f579240d934e3c88c97e90a5c79969d2c181c17"
+        "sha256": "b6fb84d77e6ae7301cebe8a5c0ce096cfa857d5bfddabeda3f16979c5be5acd3"
       },
       "adapters/desktop/language-service.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/adapters/desktop/language-service.js",

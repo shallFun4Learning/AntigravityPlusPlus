@@ -75,6 +75,12 @@ Browser login and token refresh use the launcher's current proxy settings. By de
 
 ## Getting started
 
+### Download the compiled application
+
+Open [GitHub Releases](https://github.com/shallFun4Learning/AntigravityPlusPlus/releases) and choose the ZIP for Windows x64, macOS Apple Silicon, or macOS Intel. On Windows, extract the entire archive and run `AntigravityPlusPlus.exe`. On macOS, extract and open `Antigravity++.app`. macOS packages are currently beta builds and have not been notarized by Apple.
+
+Each release includes `SHA256SUMS.txt` for download verification. Releases marked **Pre-release** are built automatically from the main branch for testing and feedback.
+
 ### Run from source
 
 Node.js 22 or newer is required:
@@ -94,6 +100,7 @@ npm test
 ```
 
 The test suite uses mock interfaces and isolated data directories. It does not launch a real Antigravity process.
+Database integration tests require the `sqlite3` command. macOS normally includes it; Windows developers can install it with `choco install sqlite`. GitHub Actions prepares this dependency automatically.
 
 ### Build the macOS app
 
@@ -125,7 +132,13 @@ Use `x86_64-apple-darwin` for Intel macOS and `x86_64-pc-windows-msvc` for Windo
 
 The update manifest is stored in `update-manifest.json`. By default, it reads verified dictionaries and runtime resources from the `main` branch of Antigravity++. Native shell changes require a new full application package; backend and interface resources can be delivered through hot updates.
 
-The GitHub Actions build verifies JavaScript modules, runs the full test suite, executes browser regression tests, and builds the Tauri application for supported platforms.
+GitHub Actions verifies JavaScript modules, runs the full test suite, executes browser regression tests, and builds the Tauri application. A Release with complete application packages and SHA-256 checksums is published only after Windows x64, macOS Apple Silicon, and macOS Intel all succeed. A failure on any platform stops publication.
+
+- A push to `main` publishes a preview such as `v0.1.0-preview.<run-number>`, using the version from `package.json`.
+- A manual workflow run on `main` also builds and publishes a preview.
+- A `v<version>` tag publishes the corresponding version. Versions with suffixes such as `beta` remain prereleases. The tag must match the versions in `package.json`, `package-lock.json`, the Tauri configuration, and Cargo.
+
+Release notes come from the matching `CHANGELOG.md` section. All assets are uploaded to a draft before publication. Reruns can complete an unfinished draft while preserving assets in an already published release.
 
 ## Contributing
 

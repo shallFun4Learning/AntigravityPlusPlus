@@ -3,14 +3,36 @@ name: Tauri Build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
   workflow_call:
 
 permissions:
   contents: read
 
+concurrency:
+  group: tauri-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
+  metadata:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate versions and release tag
+        id: release
+        run: node scripts/release.cjs metadata
   build:
+    name: Build ${{ matrix.name }}
+    needs: metadata
     strategy:
       fail-fast: false
       matrix:
@@ -34,11 +56,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Read package version
-        id: package
-        shell: bash
+      - name: Install SQLite for Windows database regressions
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          node -e "require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + require('./package.json').version + '\n')"
+          choco install sqlite --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          sqlite3 --version
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -79,7 +103,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $name = 'AntigravityPlusPlus-${{ steps.package.outputs.version }}-windows-x64'
+          $name = 'AntigravityPlusPlus-${{ needs.metadata.outputs.version }}-windows-x64'
           $stage = Join-Path 'dist-tauri' $name
           New-Item -ItemType Directory -Path $stage | Out-Null
           $release = 'src-tauri/target/${{ matrix.target }}/release'
@@ -125,7 +149,7 @@ jobs:
 
           # 5. 打包分发 ZIP 包（保持 macOS 扩展属性、代码签名与完整 App 外壳）
           mkdir -p dist-tauri
-          zip_name="AntigravityPlusPlus-${{ steps.package.outputs.version }}-${{ matrix.name }}-beta.zip"
+          zip_name="AntigravityPlusPlus-${{ needs.metadata.outputs.version }}-${{ matrix.name }}-beta.zip"
           zip_path="dist-tauri/$zip_name"
           ditto -c -k --sequesterRsrc --keepParent "$app" "$zip_path"
 
@@ -148,23 +172,23 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: AntigravityPlusPlus-${{ steps.package.outputs.version }}-${{ matrix.name }}
-          path: AntigravityPlusPlus-${{ steps.package.outputs.version }}-windows-x64.zip
+          name: release-${{ needs.metadata.outputs.version }}-${{ matrix.name }}
+          path: AntigravityPlusPlus-${{ needs.metadata.outputs.version }}-windows-x64.zip
           if-no-files-found: error
           retention-days: 14
       - name: Upload macOS app (Beta)
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: AntigravityPlusPlus-${{ steps.package.outputs.version }}-${{ matrix.name }}-beta
-          path: dist-tauri/AntigravityPlusPlus-${{ steps.package.outputs.version }}-${{ matrix.name }}-beta.zip
+          name: release-${{ needs.metadata.outputs.version }}-${{ matrix.name }}
+          path: dist-tauri/AntigravityPlusPlus-${{ needs.metadata.outputs.version }}-${{ matrix.name }}-beta.zip
           if-no-files-found: error
           retention-days: 14
       - name: Upload Standard Workflow Test Suite
         if: matrix.name == 'windows-x64'
         uses: actions/upload-artifact@v4
         with:
-          name: AntigravityPlusPlus-${{ steps.package.outputs.version }}-standard-workflow-test-suite
+          name: AntigravityPlusPlus-${{ needs.metadata.outputs.version }}-standard-workflow-test-suite
           path: |
             test/
             core/
@@ -175,7 +199,9 @@ jobs:
             scripts/check.cjs
             scripts/backend-resources.cjs
             scripts/build-update-manifest.cjs
+            scripts/release.cjs
             src-tauri/src/main.rs
+            src-tauri/Cargo.toml
             src-tauri/capabilities/
             src-tauri/tauri.conf.json
             dicts/
@@ -189,6 +215,7 @@ jobs:
             LICENSE
             README.md
             README.en.md
+            CHANGELOG.md
           retention-days: 14
       - name: Build diagnostics
         if: always()
@@ -199,3 +226,27 @@ jobs:
             src-tauri/Cargo.lock
             src-tauri/tauri.conf.json
           retention-days: 14
+  release:
+    name: Publish GitHub Release
+    needs: [metadata, build]
+    if: >-
+      github.repository == 'shallFun4Learning/AntigravityPlusPlus' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download verified platform packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-${{ needs.metadata.outputs.version }}-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify packages, generate checksums and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release.cjs publish release-assets

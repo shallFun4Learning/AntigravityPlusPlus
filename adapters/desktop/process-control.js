@@ -16,7 +16,7 @@ function matchesExecutable(executable, target, platform = process.platform) {
     && executable.startsWith(target.appDir + '/Contents/'));
 }
 
-async function listTargetProcesses(target, { execute = run, platform = process.platform } = {}) {
+async function listTargetProcesses(target, { execute = run, platform = process.platform, uid = process.getuid?.() } = {}) {
   if (platform === 'win32') {
     const literal = target.appExe.replace(/'/g, "''");
     const script = `$ErrorActionPreference='Stop'; $sid=[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value; $rows=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq '${literal}' } | ForEach-Object { $owner=Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid; if ($owner.ReturnValue -ne 0) { throw 'Cannot verify process owner' }; if ($owner.Sid -eq $sid) { [PSCustomObject]@{pid=$_.ProcessId; executable=$_.ExecutablePath; created=[string]$_.CreationDate} } }); ConvertTo-Json -InputObject $rows -Compress`;
@@ -24,10 +24,11 @@ async function listTargetProcesses(target, { execute = run, platform = process.p
     return JSON.parse(stdout.trim().replace(/^\uFEFF/, '') || '[]').filter(row => row.pid !== process.pid && matchesExecutable(row.executable, target, platform));
   }
   if (platform !== 'darwin') throw new Error('当前平台暂不支持进程清理');
+  if (!Number.isSafeInteger(uid) || uid < 0) throw new Error('无法确认当前用户，已取消进程清理');
   const { stdout } = await execute('ps', ['-ww', '-axo', 'pid=,uid=,lstart=,comm='], { timeout: 4000, maxBuffer: 4 * 1024 * 1024 });
   return stdout.split(/\r?\n/).flatMap(line => {
     const match = line.match(/^\s*(\d+)\s+(\d+)\s+((?:\S+\s+){4}\S+)\s+(.+)$/);
-    if (!match || Number(match[2]) !== process.getuid() || Number(match[1]) === process.pid) return [];
+    if (!match || Number(match[2]) !== uid || Number(match[1]) === process.pid) return [];
     return matchesExecutable(match[4], target, platform) ? [{ pid: Number(match[1]), created: match[3], executable: match[4] }] : [];
   });
 }
