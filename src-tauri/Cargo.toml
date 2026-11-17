@@ -1,8 +1,8 @@
 [package]
 name = "antigravityplusplus"
-version = "4.0.5"
+version = "0.1.0"
 edition = "2021"
-description = "Antigravity++ Lite - TUN-free process proxy, reversible DOM localization and context and quota rings"
+description = "Antigravity++ - TUN-free process proxy, reversible DOM localization and context and quota rings"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

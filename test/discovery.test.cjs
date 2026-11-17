@@ -75,3 +75,23 @@ test('desktopAdapter expose target-aware locate and detectRunningTarget', async 
   assert.equal(await adapter.running('ide'), false);
   assert.equal(await adapter.detectRunningTarget(), null);
 });
+
+test('desktopRunning delegates macOS and Windows checks to exact target process matching', async () => {
+  const target = {
+    id: 'hub',
+    appExe: '/Applications/Antigravity.app/Contents/MacOS/Antigravity',
+    appDir: '/Applications/Antigravity.app'
+  };
+  let received;
+  const running = await desktopRunning(target, {}, {
+    list: async (info, options) => {
+      received = { info, options };
+      return [{ pid: 123 }];
+    }
+  });
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    assert.equal(running, true);
+    assert.equal(received.info, target);
+    assert.equal(received.options.platform, process.platform);
+  }
+});

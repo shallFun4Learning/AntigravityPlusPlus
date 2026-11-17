@@ -16,6 +16,17 @@ export async function request(route, { body, method = body === undefined ? 'GET'
 
 export const api = {
   status: () => request('/api/status'),
+  accounts: () => request('/api/accounts'),
+  startAccountOAuth: clientKey => request('/api/accounts/oauth/start', { body: clientKey ? { clientKey } : {} }),
+  openAccountOAuth: () => request('/api/accounts/oauth/open', { body: {} }),
+  cancelAccountOAuth: () => request('/api/accounts/oauth/cancel', { body: {} }),
+  completeAccountOAuth: url => request('/api/accounts/oauth/complete', { body: { url }, timeoutMs: 30000 }),
+  accountOAuthStatus: () => request('/api/accounts/oauth/status'),
+  addAccount: body => request('/api/accounts/add', { body }),
+  importCurrentAccount: target => request('/api/accounts/import-current', { body: { target } }),
+  switchAccount: body => request('/api/accounts/switch', { body, timeoutMs: 120000 }),
+  refreshAccount: accountId => request('/api/accounts/refresh', { body: { accountId } }),
+  deleteAccount: accountId => request('/api/accounts/delete', { body: { accountId } }),
   logs: () => request('/api/logs?limit=200'),
   configure: body => request('/api/config', { body }),
   browseExe: target => request('/api/browse-exe', { body: { target } }),

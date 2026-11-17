@@ -4,7 +4,7 @@
 
 # Antigravity++
 
-<p align="center">An independent Lite launcher for Antigravity desktop and IDE clients</p>
+<p align="center">Multi-account management · Quota rings · Local proxy · Reversible localization</p>
 
 <p align="center">
   <a href="https://github.com/shallFun4Learning/AntigravityPlusPlus/actions/workflows/tauri-ci.yml"><img src="https://github.com/shallFun4Learning/AntigravityPlusPlus/actions/workflows/tauri-ci.yml/badge.svg" alt="Tauri Build"></a>
@@ -13,44 +13,65 @@
 
 [English](README.en.md) · [中文](README.md)
 
-Antigravity++ is an independently maintained Lite launcher for Antigravity desktop and IDE clients. It provides local proxy configuration, reversible interface localization, context monitoring, and model quota monitoring without modifying the Antigravity installation or providing proxy nodes.
+Antigravity++ is an independent launcher for Antigravity desktop and IDE clients. Manage multiple accounts, import an existing local login, and switch accounts from one panel. Quota rings inside the Antigravity composer show the active model's remaining quota and reset times.
 
-## Project scope
-
-Antigravity++ brings launching, process handling, and interface enhancements into one lightweight application:
-
-- Configure a per-process proxy using the user's own local proxy.
-- Select between the Antigravity desktop client and IDE, with automatic installation discovery.
-- Inject reversible interface enhancements through CDP.
-- Display context usage and remaining model quota beside the Antigravity composer.
-- Read quota windows, remaining percentages, and reset times from the local read-only service.
-- Handle process conflicts and leftover background processes with a guided cleanup and restart flow.
+It also provides local proxy configuration, reversible interface localization, and context monitoring. The current version is **0.1.0**.
 
 ## Features
 
-### Lite launcher
+### Multi-account management
 
-- Supports the Antigravity desktop client and IDE.
-- Supports common local proxy ports and custom ports.
-- Supports direct connections without forcing a proxy.
+- **Import the current login**: read existing local Antigravity credentials into the account store without exiting the running client.
+- **Add through browser login**: generate a Google authorization link with open and copy actions. A local callback identifies the email and saves the account automatically.
+- **Complete login manually**: paste the full callback URL when automatic completion does not work. An advanced credential entry form is also available.
+- **Restart after switching**: after confirmation, stop the selected client, update its credentials, and restart it with the selected account.
+- **Separate current-account selections**: track the desktop client and IDE independently, refresh access credentials, and remove local account records.
+- **Encrypted local storage**: keep the account index locally and encrypt credentials with AES-256-GCM using a separate local key.
+
+The first use of account management displays a risk notice that requires an explicit checkbox confirmation. Acceptance is saved locally, so later launches do not repeat the notice.
+
+> Account management may trigger Google's risk controls and result in account restrictions, suspension, or bans. Follow applicable local laws, Google's terms, and Antigravity's usage policies. Switching accounts exits and restarts the client; save unfinished work first.
+
+### Quota rings and context monitoring
+
+- The **quota ring** appears inside the Antigravity composer. It prefers the active model's quota and falls back to a shared model-family quota when an exact model window is unavailable.
+- Click the ring to view the weekly and five-hour windows, remaining percentages, and reset times supplied by the local service.
+- Distinguishes exhausted, unknown, disabled, and unavailable states. An effective remaining quota below 1% displays as **0%**, preventing an exhausted quota from appearing as 1%.
+- The **context ring** shows the latest request's estimated context usage, with model and generation-speed details.
+- Monitoring reads the local language service without uploading conversations, account information, or access credentials to third parties.
+
+Enable “界面深度汉化与监控” and “AG 内上下文与模型用量” in the launcher, then launch the selected client through Antigravity++. The rings appear inside Antigravity, rather than in the account list.
+
+### Launching and local proxy
+
+- Supports Antigravity desktop and IDE clients, with automatic installation discovery and custom paths.
+- Connects to your own local proxy on a per-process basis without TUN, with common port presets and custom port input.
+- Clearly displays the selected port and validates the 1–65535 range. Direct connections are also supported.
+- Offers a cleanup and restart action for process conflicts or leftover background processes.
 - Supports Windows and macOS; macOS packages are currently validated through a beta workflow.
-
-### Context and quota monitoring
-
-- Shows the estimated context usage of the most recent request.
-- Prefers the quota for the exact active model.
-- Falls back to a shared model-family quota when an exact model window is unavailable.
-- Shows weekly and five-hour windows, remaining percentages, and reset times.
-- Distinguishes exhausted, unknown, disabled, and unavailable states.
-- Displays an effective remaining quota below 1% as 0% so an exhausted quota is not shown as 1%.
-- Reads local language-service data without uploading account information or access credentials.
 
 ### Reversible interface enhancements
 
 - Provides dynamic localization for the desktop client.
 - Restores the original page text when localization is disabled.
 - Keeps context and quota monitoring available for the IDE without injecting the desktop localization dictionary.
-- Supports signed hot updates for dictionaries and backend/UI resources.
+- Supports dictionary and backend/UI hot updates, with SHA-256 verification of downloaded files.
+
+## Account management quick start
+
+1. Select the desktop or IDE client to manage. Use “导入当前登录” to import an existing local login.
+2. To add another account, select “手动添加”, then open or copy the generated link and complete Google authorization. The account is saved automatically after login.
+3. If it is not saved automatically, paste the full callback URL from the browser's address bar into the manual completion field and select “回填登录结果”. **Copy the URL shown after a successful login.**
+4. Save your work, select “切换” for the desired account, confirm in the application, and wait for the client to restart.
+
+Browser login and token refresh use the launcher's current proxy settings. By default, OAuth client configuration is read from the local Antigravity installation without writing its values to this repository; install the client and verify its path first. Advanced deployments can supply their own OAuth client through `ANTIGRAVITY_OAUTH_CLIENT_ID` and `ANTIGRAVITY_OAUTH_CLIENT_SECRET`.
+
+## Troubleshooting
+
+- **Login reports `fetch failed`**: check that the selected local proxy port and proxy process are available. Direct mode requires access to Google's login and token endpoints. Manual completion supplies the callback result; saving the account still requires network access for the token exchange.
+- **The current login cannot be imported**: check the selected client. If the email cannot be identified, launch that client, sign in, and retry. If `sqlite3` is missing, database-based import needs that command; browser login is an alternative.
+- **Switching does not take effect**: continue through the in-app confirmation dialog. Failures while stopping the client, updating credentials, or relaunching are displayed in the interface and can be investigated through the runtime log.
+- **A ring has no numeric value**: check the monitoring switches and local statistics service. Unknown and disconnected states are displayed separately and are not treated as 0%.
 
 ## Getting started
 
@@ -92,8 +113,8 @@ Use `x86_64-apple-darwin` for Intel macOS and `x86_64-pc-windows-msvc` for Windo
 
 | Directory | Purpose |
 | --- | --- |
-| `core/` | Session, settings, storage, and event infrastructure |
-| `features/` | Proxy, localization, context, and quota monitoring |
+| `core/` | Sessions, settings, encrypted account storage, OAuth, and events |
+| `features/` | Login callbacks, client credentials, proxy, localization, context, and quota monitoring |
 | `adapters/desktop/` | Desktop and IDE discovery, CDP, and language-service adapters |
 | `desktop/` | Application assembly, local API, and host communication |
 | `ui/` | Launcher interface and interaction logic |
@@ -122,9 +143,10 @@ For changes involving the interface, launch flow, or quota display, include the 
 - This project continues development on the Lite foundation of [EasyAntigravity Lite](https://github.com/DSDS-CMHL/EasyAntigravity); see [THIRD-PARTY-NOTICES.md](https://github.com/shallFun4Learning/AntigravityPlusPlus/blob/main/THIRD-PARTY-NOTICES.md) for third-party code and license information.
 - The localization dictionary builds on community-maintained work, including [nicktan @ linux.do](https://linux.do/t/topic/2896116).
 - The context-monitoring implementation references [Antigrative Dashboard / AG Pulse](https://github.com/YOU-SHOULD-KNOW-ME/antigrative-dashboard), with the relevant material under the MIT License.
+- The multi-account design and client-credential compatibility research reference [Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager). Thanks to lbjlaq and its contributors; AntigravityPlusPlus independently adapts the behavior to its own architecture. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for the upstream license note.
 
 ## License
 
 Antigravity++ is released under the [MIT License](LICENSE).
 
-This project is not affiliated with Google. Use it in accordance with the applicable terms of the related software and services.
+This project is not affiliated with Google and does not provide proxy nodes. Use it in accordance with the applicable local laws and the terms of the related software and services.

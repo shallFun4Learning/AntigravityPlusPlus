@@ -3,6 +3,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { execFile, execFileSync } = require('node:child_process');
 const { promisify } = require('node:util');
+const { listTargetProcesses } = require('./process-control');
 const run = promisify(execFile);
 
 function normalizePath(value) {
@@ -227,16 +228,19 @@ function resolveTarget(preference = 'auto', settings = {}) {
   return targets.hub;
 }
 
-async function desktopRunning(target = 'hub') {
+async function desktopRunning(target = 'hub', settings = {}, { list = listTargetProcesses, execute = run } = {}) {
+  const targetInfo = target && typeof target === 'object'
+    ? target
+    : discoverDesktop(target, settings);
   try {
-    if (process.platform === 'win32') {
-      const imageName = target === 'ide' ? 'Antigravity IDE.exe' : 'Antigravity.exe';
-      const { stdout } = await run('tasklist.exe', ['/FI', `IMAGENAME eq ${imageName}`, '/FO', 'CSV', '/NH'], { windowsHide: true, timeout: 4000 });
-      const pattern = target === 'ide' ? /"Antigravity IDE\.exe"/i : /"Antigravity\.exe"/i;
-      return pattern.test(stdout);
+    // Match the installed executable instead of using `pgrep -f`: the manager
+    // itself also contains "Antigravity" in its bundle path.
+    if (process.platform === 'darwin' || process.platform === 'win32') {
+      const rows = await list(targetInfo, { execute, platform: process.platform });
+      return rows.length > 0;
     }
-    const processName = target === 'ide' ? 'Antigravity IDE' : 'Antigravity';
-    const { stdout } = await run('pgrep', ['-f', processName], { timeout: 4000 });
+    const processName = targetInfo.id === 'ide' ? 'Antigravity IDE' : 'Antigravity';
+    const { stdout } = await execute('pgrep', ['-x', processName], { timeout: 4000 });
     return /^\d+/m.test(stdout);
   } catch { return false; }
 }
@@ -244,15 +248,15 @@ async function desktopRunning(target = 'hub') {
 async function detectRunningTarget(preferred = 'auto', settings = {}) {
   const targets = discoverAllTargets(settings);
   if (preferred === 'ide') {
-    if (await desktopRunning('ide')) return targets.ide;
+    if (await desktopRunning(targets.ide, settings)) return targets.ide;
     return null;
   }
   if (preferred === 'hub') {
-    if (await desktopRunning('hub')) return targets.hub;
+    if (await desktopRunning(targets.hub, settings)) return targets.hub;
     return null;
   }
-  if (await desktopRunning('hub')) return targets.hub;
-  if (await desktopRunning('ide')) return targets.ide;
+  if (await desktopRunning(targets.hub, settings)) return targets.hub;
+  if (await desktopRunning(targets.ide, settings)) return targets.ide;
   return null;
 }
 

@@ -1,6 +1,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createSettings, assertLaunchSettingsMutable } = require('../core/settings');
+const { AccountStore } = require('../core/accounts');
+const { resolveOAuthClient } = require('../core/oauth');
+const { createAccountManager } = require('../core/account-manager');
 const { Events } = require('../core/events');
 const { Session } = require('../core/session');
 const { writeJson } = require('../core/storage');
@@ -12,20 +15,43 @@ const { createDesktopAdapter } = require('../adapters/desktop');
 const { createHost } = require('./host');
 const { createApi } = require('./api');
 const { LanguageService } = require('../adapters/desktop/language-service');
+const { readCurrentCredentials } = require('../features/antigravity-credentials');
 const { ContextMonitor } = require('../features/context-monitor');
 const { QuotaMonitor } = require('../features/quota-monitor');
+const { createProxyFetch } = require('../features/network');
+const { createOAuthLogin } = require('../features/oauth-login');
 
-function createApplication({ rootDir, dataDir, native = false, testMode = false, fetchBytes, onClose = () => {} }) {
+async function readCurrentIdentity({ target, targetInfo }) {
+  const client = new LanguageService({
+    profile: targetInfo?.profile,
+    target
+  });
+  const result = await client.call('GetUserStatus');
+  const email = result?.userStatus?.email;
+  if (typeof email !== 'string' || !email.trim()) {
+    throw new Error('Antigravity 当前登录状态没有返回邮箱');
+  }
+  return email.trim();
+}
+
+function createApplication({ rootDir, dataDir, native = false, testMode = false, fetchBytes, fetchImpl, onClose = () => {} }) {
   fs.mkdirSync(dataDir, { recursive: true });
   const events = new Events(dataDir);
   const settings = createSettings(path.join(dataDir, 'settings.json'));
+  const resolveAccountClient = key => resolveOAuthClient(key, { settings: settings.get() });
+  const networkFetch = typeof fetchImpl === 'function'
+    ? fetchImpl
+    : createProxyFetch({ settings });
   const desktop = createDesktopAdapter(testMode);
   let dictionary = loadDictionary(rootDir, dataDir);
   const host = createHost({ native, testMode, events });
   const languageService = new LanguageService({ profile: desktop.profile });
   const contextMonitor = new ContextMonitor(languageService);
   const quotaMonitor = new QuotaMonitor(languageService);
+  const accountStore = new AccountStore(dataDir);
   let session;
+  let accountManager;
+  let oauthLogin;
   let lastStatus = '';
   const cdp = new CdpHub({
     profile: desktop.profile,
@@ -81,11 +107,14 @@ function createApplication({ rootDir, dataDir, native = false, testMode = false,
   let closing;
   const app = {
     rootDir, dataDir, events, settings, desktop, host, cdp, session, contextMonitor, quotaMonitor, updater,
+    accountManager: null,
+    oauthLogin: null,
     status() {
       const currentSettings = settings.get();
       const allTargets = desktop.discoverAllTargets ? desktop.discoverAllTargets(currentSettings) : {};
       const active = session.activeTarget || (desktop.resolveTarget ? desktop.resolveTarget(currentSettings.targetApp, currentSettings) : { id: 'hub', name: 'Antigravity' });
       const bothInstalled = Boolean(allTargets.hub?.exists && allTargets.ide?.exists);
+      const accounts = accountManager?.list() || { accounts: [], currentByTarget: { hub: null, ide: null } };
       return {
         ...currentSettings, ...session.snapshot(), ...cdp.status, ...updater.currentState(),
         dictEntries: Object.keys(dictionary).length,
@@ -93,7 +122,9 @@ function createApplication({ rootDir, dataDir, native = false, testMode = false,
         targets: allTargets,
         activeTarget: active.id,
         targetName: active.name,
-        bothInstalled
+        bothInstalled,
+        accounts,
+        oauth: oauthLogin?.status() || { ok: true, state: 'idle', active: false }
       };
     },
     async reloadDictionary() {
@@ -144,6 +175,7 @@ function createApplication({ rootDir, dataDir, native = false, testMode = false,
       if (closing) return closing;
       closing = (async () => {
         events.log('SYSTEM', '正在退出: ' + reason, 'tag-warn');
+        await oauthLogin?.close();
         const result = await session.close(reason);
         host.dispose();
         api.close();
@@ -155,6 +187,27 @@ function createApplication({ rootDir, dataDir, native = false, testMode = false,
   };
   const api = createApi(app);
   app.api = api;
+  accountManager = createAccountManager({
+    store: accountStore,
+    settings,
+    desktop,
+    session,
+    events,
+    configure: input => app.configure(input),
+    credentialReader: readCurrentCredentials,
+    identityReader: readCurrentIdentity,
+    resolveOAuthClient: resolveAccountClient,
+    fetchImpl: networkFetch
+  });
+  app.accountManager = accountManager;
+  oauthLogin = createOAuthLogin({
+    accountManager,
+    host,
+    events,
+    resolveClient: resolveAccountClient,
+    fetchImpl: networkFetch
+  });
+  app.oauthLogin = oauthLogin;
   return app;
 }
 

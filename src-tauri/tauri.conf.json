@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Antigravity++",
-  "version": "4.0.5",
+  "version": "0.1.0",
   "identifier": "com.antigravityplusplus.launcher.tauri",
   "build": {
     "frontendDist": "../src"
@@ -11,11 +11,11 @@
     "windows": [
       {
         "label": "main",
-        "title": "Antigravity++ Lite",
-        "width": 450,
-        "height": 560,
-        "minWidth": 380,
-        "minHeight": 460,
+        "title": "Antigravity++",
+        "width": 700,
+        "height": 820,
+        "minWidth": 520,
+        "minHeight": 640,
         "center": true
       }
     ],
@@ -31,10 +31,11 @@
       "icons/icon.png"
     ],
     "externalBin": [
-      "binaries/easyag-node"
+      "binaries/antigravity-node"
     ],
     "resources": {
-      "backend/": "backend/"
+      "backend/": "backend/",
+      "node-lib/": "node-lib/"
     },
     "macOS": {
       "minimumSystemVersion": "11.0",

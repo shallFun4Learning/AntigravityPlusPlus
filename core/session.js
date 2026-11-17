@@ -45,7 +45,7 @@ class Session {
     try {
       const target = this.resolveTarget();
       if (!target.exists) throw Object.assign(new Error(`未找到 ${target.name}: ` + target.appExe), { code: 'TARGET_NOT_FOUND' });
-      const isRunning = await this.desktop.running(target.id);
+      const isRunning = await this.desktop.running(target);
       if (isRunning) throw Object.assign(new Error(`检测到已有 ${target.name} 进程，请先退出；如窗口已经关闭，可清理后重新启动。`), { code: 'PROCESS_CONFLICT' });
       if (this.closed || generation !== this.generation) throw new Error('启动已取消');
       const settings = this.settings.get();
@@ -108,7 +108,7 @@ class Session {
       if (!result?.ok) throw new Error('仍有进程未退出，已停止重新启动，请检查权限或稍后重试');
       if (this.closed || generation !== this.generation) throw new Error('清理已取消');
       // Keep the normal running preflight; never bypass verification after cleanup.
-      if (await this.desktop.running(target.id)) throw new Error('仍检测到同名进程，已停止重新启动');
+      if (await this.desktop.running(target)) throw new Error('仍检测到同名进程，已停止重新启动');
       this.activeTarget = null;
       this.events.log('SYSTEM', `${target.name} 进程已清理，正在重新启动`, 'tag-proxy');
       this.change('idle');
@@ -118,6 +118,40 @@ class Session {
       if (!this.closed) this.change('error');
       this.events.log('SYSTEM', `清理失败: ${error.message}`, 'tag-alert');
       return { ok: false, error: error.message, code: 'CLEANUP_FAILED' };
+    }
+  }
+
+  async stopOnly() {
+    if (this.closed) return { ok: false, error: 'Antigravity++ 正在退出', code: 'CLOSED' };
+    if (['preparing', 'launching', 'cleaning'].includes(this.phase)) {
+      return { ok: false, error: '当前正在处理启动，请稍候', code: 'BUSY' };
+    }
+    if (this.phase === 'idle') return { ok: true, alreadyStopped: true };
+
+    const target = this.activeTarget || this.resolveTarget();
+    const generation = ++this.generation;
+    this.change('cleaning');
+    this.child = null;
+    clearInterval(this.monitor);
+    try {
+      if (this.finishing) await this.finishing;
+      await this.cdp.stop();
+      if (!this.desktop.stop) throw new Error('当前环境不支持进程清理');
+      const result = await this.desktop.stop(target, {
+        cancelled: () => this.closed || generation !== this.generation
+      });
+      if (!result?.ok) throw new Error('仍有进程未退出，账号切换已停止，请检查权限或稍后重试');
+      if (this.closed || generation !== this.generation) throw new Error('清理已取消');
+      if (await this.desktop.running(target)) throw new Error('仍检测到同名进程，账号切换已停止');
+      this.activeTarget = null;
+      this.change('idle');
+      this.events.log('SYSTEM', `${target.name} 已退出，可以切换账号`, 'tag-proxy');
+      return { ok: true, target: target.id };
+    } catch (error) {
+      this.activeTarget = null;
+      if (!this.closed) this.change('error');
+      this.events.log('SYSTEM', `退出失败: ${error.message}`, 'tag-alert');
+      return { ok: false, error: error.message, code: 'STOP_FAILED' };
     }
   }
 
@@ -145,7 +179,7 @@ class Session {
       if (this.monitoring || this.closed) return;
       this.monitoring = true;
       try {
-        const running = await this.desktop.running(runningTarget.id);
+        const running = await this.desktop.running(runningTarget);
         if (monitorGeneration === this.generation && !this.closed && !running) await this.finish(`${runningTarget.name} 已关闭`);
       } finally { this.monitoring = false; }
     }, 3000);

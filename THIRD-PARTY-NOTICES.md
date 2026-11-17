@@ -1,5 +1,12 @@
 # Third-party notices
 
+## EasyAntigravity
+
+Source: https://github.com/DSDS-CMHL/EasyAntigravity
+
+The project was originally developed from EasyAntigravity Lite. The original
+MIT copyright notice, Copyright (c) 2026 Astwarp, is retained in [LICENSE](LICENSE).
+
 ## Antigrative Dashboard / AG Pulse
 
 Source: https://github.com/YOU-SHOULD-KNOW-ME/antigrative-dashboard
@@ -31,3 +38,19 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Antigravity-Manager
+
+Source: https://github.com/lbjlaq/Antigravity-Manager
+
+The multi-account feature design and client-credential compatibility research
+in AntigravityPlusPlus reference this project. The account store, switch
+workflow, credential adapter, and launcher UI were independently implemented
+for AntigravityPlusPlus and do not bundle source files or assets from
+Antigravity-Manager.
+
+The upstream Antigravity-Manager project is distributed under the
+[CC BY-NC-SA 4.0 License](https://github.com/lbjlaq/Antigravity-Manager/blob/main/LICENSE).
+That license applies to the upstream project and any upstream material that
+is separately retained; it does not change the MIT license of independently
+written AntigravityPlusPlus code.

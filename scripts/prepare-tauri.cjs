@@ -2,6 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const { copyBackendResources } = require('./backend-resources.cjs');
 const root = path.resolve(__dirname, '..');
 const triple = process.argv[2];
@@ -16,20 +17,55 @@ assert.equal(path.resolve(backend), path.resolve(root, 'src-tauri', 'backend'));
 assert.ok(backend.startsWith(root + path.sep), 'Clean only the generated backend directory');
 fs.rmSync(backend, { recursive: true, force: true });
 copyBackendResources(root, backend);
-fs.mkdirSync(path.join(root, 'src-tauri', 'binaries'), { recursive: true });
-const runtime = path.join(root, 'src-tauri', 'binaries', 'easyag-node-' + triple + (process.platform === 'win32' ? '.exe' : ''));
+const tauriDir = path.join(root, 'src-tauri');
+const binaries = path.join(tauriDir, 'binaries');
+const nodeLibDir = path.join(tauriDir, 'node-lib');
+fs.mkdirSync(binaries, { recursive: true });
+fs.rmSync(nodeLibDir, { recursive: true, force: true });
+fs.mkdirSync(nodeLibDir, { recursive: true });
+const runtime = path.join(binaries, 'antigravity-node-' + triple + (process.platform === 'win32' ? '.exe' : ''));
 fs.copyFileSync(process.execPath, runtime);
 if (process.platform !== 'win32') fs.chmodSync(runtime, 0o755);
 if (process.platform === 'darwin') {
   try {
-    const { execFileSync } = require('node:child_process');
-    const entPath = path.join(root, 'src-tauri', 'Entitlements.plist');
+    const linkedLibraries = execFileSync('otool', ['-L', runtime], { encoding: 'utf8' })
+      .split('\n')
+      .slice(1)
+      .map(line => line.trim().split(/\s+/)[0])
+      .filter(Boolean)
+      .filter(library => /^libnode(?:\.[^/]+)?\.dylib$/.test(path.basename(library)));
+    const nodePrefix = path.resolve(path.dirname(process.execPath), '..');
+    const copiedLibraries = [];
+    for (const library of linkedLibraries) {
+      const name = path.basename(library);
+      const candidates = [
+        path.isAbsolute(library) ? library : null,
+        path.join(nodePrefix, 'lib', name),
+        path.join(path.dirname(process.execPath), name),
+        path.join(path.dirname(process.execPath), '..', 'lib', name)
+      ].filter(Boolean);
+      const source = candidates.find(candidate => fs.existsSync(candidate));
+      assert.ok(source, `Could not locate Node runtime library ${name}`);
+      fs.copyFileSync(source, path.join(nodeLibDir, name));
+      copiedLibraries.push(name);
+    }
+    if (copiedLibraries.length > 0) {
+      execFileSync('install_name_tool', [
+        '-add_rpath',
+        '@loader_path/../Resources/node-lib',
+        runtime
+      ]);
+      console.log('Bundled Node runtime libraries:', copiedLibraries.join(', '));
+    } else {
+      console.log('Node runtime does not require a separate libnode library');
+    }
+    const entPath = path.join(tauriDir, 'Entitlements.plist');
     if (fs.existsSync(entPath)) {
       execFileSync('codesign', ['--force', '--options', 'runtime', '--sign', '-', '--entitlements', entPath, runtime]);
-      console.log('Signed easyag-node with JIT entitlements');
+      console.log('Signed antigravity-node with JIT entitlements');
     }
   } catch (e) {
-    console.warn('Warning: Could not pre-sign runtime:', e.message);
+    throw new Error(`Could not prepare the macOS Node runtime: ${e.message}`, { cause: e });
   }
 }
 console.log('Prepared backend and Node runtime:', triple);

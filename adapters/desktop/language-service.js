@@ -10,6 +10,14 @@ const METHODS = new Set([
 ]);
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function csrfFromCommand(command) {
+  return command?.match(/--csrf_token(?:=|\s+)"?([^\s"]+)/)?.[1];
+}
+
+function hasUserIdentity(result) {
+  return typeof result?.userStatus?.email === 'string' && result.userStatus.email.trim();
+}
+
 async function readLogTail(file) {
   const handle = await fs.open(file, 'r');
   try {
@@ -28,6 +36,20 @@ class LanguageService {
     this.generation = 0;
   }
 
+  async probeReadOnlyServers(row, csrf, ports, generation) {
+    const candidates = [];
+    for (const port of [...new Set(ports)].slice(0, 16)) {
+      if (generation !== this.generation) throw new Error('采集已取消');
+      if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
+      const candidate = { pid: row.pid, port, csrf };
+      try {
+        const result = await this.request(candidate, 'GetUserStatus', {}, AbortSignal.timeout(2500));
+        if (hasUserIdentity(result)) candidates.push(candidate);
+      } catch { /* Only the PID-owned HTTP port speaks the read-only service. */ }
+    }
+    return candidates;
+  }
+
   async discover() {
     if (this.server && Date.now() - this.discoveredAt < 15000) return this.server;
     if (this.discovering) return this.discovering;
@@ -39,22 +61,24 @@ class LanguageService {
       if (this.target === 'ide') {
         if (rows.length !== 1) throw new Error('等待唯一的 IDE 对话后台');
         const row = rows[0];
-        const csrf = row.command?.match(/--csrf_token(?:=|\s+)"?([^\s"]+)/)?.[1];
-        const candidates = [];
-        if (csrf) for (const port of [...row.ports].slice(0, 16)) {
-          if (generation !== this.generation) throw new Error('采集已取消');
-          if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
-          const candidate = { pid: row.pid, port, csrf };
-          try {
-            const result = await this.request(candidate, 'GetUserStatus', {}, AbortSignal.timeout(2500));
-            if (typeof result?.userStatus?.email === 'string' && result.userStatus.email.trim()) candidates.push(candidate);
-          } catch { /* Only the PID-owned HTTP port speaks the read-only service. */ }
-        }
+        const csrf = csrfFromCommand(row.command);
+        const candidates = csrf ? await this.probeReadOnlyServers(row, csrf, row.ports, generation) : [];
         if (candidates.length === 1) server = candidates[0];
       } else {
-        for (const file of logPaths(this.profile)) {
-          try { server = serverFromDiscovery(await this.readLog(file, 'utf8'), rows); break; }
-          catch { /* Try the next known host log path; do not expose paths or credentials. */ }
+        if (rows.length === 1) {
+          const row = rows[0];
+          const csrf = csrfFromCommand(row.command);
+          const hintedPorts = [];
+          for (const file of logPaths(this.profile)) {
+            try {
+              const hinted = serverFromDiscovery(await this.readLog(file, 'utf8'), rows);
+              hintedPorts.push(hinted.port);
+            } catch { /* Logs are only a hint; port probing below remains authoritative. */ }
+          }
+          if (csrf) {
+            const candidates = await this.probeReadOnlyServers(row, csrf, [...hintedPorts, ...row.ports], generation);
+            if (candidates.length === 1) server = candidates[0];
+          }
         }
       }
       if (!server) throw new Error(rows.length > 1 ? '多个 AG 后台，暂不采集' : '等待 AG 本地统计接口');

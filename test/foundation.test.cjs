@@ -22,7 +22,9 @@ async function start() {
       EASYAG_TAURI: '1',
       EASYAG_TEST_MODE: '1',
       EASYAG_DATA_DIR: data,
-      EASYAG_READY_FILE: ready
+      EASYAG_READY_FILE: ready,
+      ANTIGRAVITY_OAUTH_CLIENT_ID: 'foundation-client',
+      ANTIGRAVITY_OAUTH_CLIENT_SECRET: 'foundation-secret'
     },
     stdio: ['pipe', 'pipe', 'pipe']
   });
@@ -51,7 +53,46 @@ async function start() {
     assert.equal(status.enableI18n, true);
     assert.equal(status.enableContextMonitor, true);
     assert.equal(status.enableProxy, true);
+    assert.equal(status.accountRiskAcknowledged, false);
     assert.ok(status.dictEntries > 100, '词典应已加载');
+    const riskConfirmation = await fetch(app.url + '/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountRiskAcknowledged: true })
+    });
+    assert.equal(riskConfirmation.status, 200);
+    assert.equal((await riskConfirmation.json()).settings.accountRiskAcknowledged, true);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(app.data, 'settings.json'), 'utf8')).accountRiskAcknowledged, true);
+    const emptyAccounts = await (await fetch(app.url + '/api/accounts')).json();
+    assert.deepEqual(emptyAccounts.accounts, []);
+    const oauthStart = await fetch(app.url + '/api/accounts/oauth/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    assert.equal(oauthStart.status, 200);
+    const oauthPayload = await oauthStart.json();
+    const oauthRedirect = new URL(oauthPayload.url).searchParams.get('redirect_uri');
+    assert.match(oauthRedirect, /^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):\d+\/oauth-callback$/);
+    assert.equal((await (await fetch(app.url + '/api/accounts/oauth/status')).json()).state, 'waiting');
+    const oauthCancel = await fetch(app.url + '/api/accounts/oauth/cancel', { method: 'POST', body: '{}' });
+    assert.equal(oauthCancel.status, 200);
+    assert.equal((await oauthCancel.json()).state, 'idle');
+    const addedAccount = await fetch(app.url + '/api/accounts/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'foundation@example.com',
+        label: '测试账号',
+        accessToken: 'foundation-access'
+      })
+    });
+    assert.equal(addedAccount.status, 200);
+    const addedPayload = await addedAccount.json();
+    assert.equal(addedPayload.ok, true);
+    assert.equal(addedPayload.account.email, 'foundation@example.com');
+    assert.equal('accessToken' in addedPayload.account, false, 'API 不得返回明文访问令牌');
+    assert.equal((await (await fetch(app.url + '/api/accounts')).json()).accounts.length, 1);
 
     for (const removedRoute of ['/api/pilot/project', '/api/pilot/global', '/api/danger-rules', '/api/kb', '/api/injected', '/api/agent-event', '/capsule.html']) {
       const res = await fetch(app.url + removedRoute);
@@ -83,6 +124,7 @@ async function start() {
     assert.equal(status2.enableProxy, false);
     assert.equal(status2.targetApp, 'ide');
     assert.equal(status2.activeTarget, 'ide');
+    assert.equal(status2.accountRiskAcknowledged, true);
 
     console.log('PASS: foundation API smoke (ping/status/config/security)');
   } finally {

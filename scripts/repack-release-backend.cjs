@@ -12,7 +12,7 @@ fs.rmSync(destination, { recursive: true, force: true });
 copyBackendResources(root, destination);
 fs.writeFileSync(path.join(destination, 'NODE-LICENSE.txt'), license);
 const pkg = JSON.parse(fs.readFileSync(path.join(destination, 'package.json'), 'utf8'));
-assert.equal(pkg.version, '4.0.5');
+assert.equal(pkg.version, '0.1.0');
 assert.ok(fs.existsSync(path.join(destination, 'adapters/desktop/process-control.js')));
 assert.equal(Object.keys(require('../features/i18n').loadDictionary(destination)).length, 3376);
 console.log('Release backend verified:', pkg.version, destination);

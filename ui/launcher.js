@@ -13,7 +13,16 @@ let activeTarget = 'hub';
 let activeTargetName = 'Antigravity';
 let clientRunningState = false;
 let currentTargets = {};
+let accountState = { accounts: [], currentByTarget: { hub: null, ide: null } };
 let pathModalDismissed = false;
+let accountOAuthPollTimer = null;
+let accountOAuthPollInFlight = false;
+let accountOAuthAttempt = 0;
+let accountConfirmResolver = null;
+let accountRiskAcknowledged = false;
+let accountRiskResolver = null;
+let accountRiskSaving = false;
+let accountRiskReturnFocus = null;
 const logKeys = new Set();
 
 // Suppress the embedded browser's default menu in the launcher.
@@ -55,6 +64,62 @@ function updateProxyUi(enabled) {
   }
 }
 
+function isValidPort(value) {
+  return /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535;
+}
+
+function validatePortInput(showError = false) {
+  const input = element('proxyPortInput');
+  const row = document.querySelector('.port-input-row');
+  const error = element('portInputError');
+  if (!input) return false;
+  const value = input.value.trim();
+  const valid = isValidPort(value);
+  const visible = !valid && (showError || value.length > 0);
+  const message = !value
+    ? '请输入 1–65535 的端口'
+    : '端口必须是 1–65535 的整数';
+  if (row) row.classList.toggle('invalid', visible);
+  if (error) error.textContent = visible ? message : '';
+  input.setAttribute('aria-invalid', String(visible));
+  return valid;
+}
+
+function updatePortSelection() {
+  const input = element('proxyPortInput');
+  if (!input) return;
+  const value = input.value.trim();
+  const valid = isValidPort(value);
+  let selectedControl = null;
+
+  document.querySelectorAll('[data-port]').forEach(control => {
+    const selected = Boolean(value) && control.dataset.port === value;
+    control.classList.toggle('active', selected);
+    control.setAttribute('aria-pressed', String(selected));
+    if (selected) selectedControl = control;
+  });
+
+  const state = element('portCurrentState');
+  const hint = element('portSelectionHint');
+  const selectedName = selectedControl?.querySelector('.tag-hint')?.textContent.trim();
+  if (state) {
+    state.classList.toggle('custom', !selectedControl);
+    state.classList.toggle('invalid', Boolean(value) && !valid);
+    state.textContent = selectedControl
+      ? `已选择 ${value}`
+      : value
+        ? `自定义 ${value}`
+        : '等待输入';
+  }
+  if (hint) {
+    hint.textContent = selectedName
+      ? `已选择 ${selectedName} · 也可输入自定义端口`
+      : value
+        ? valid ? '自定义端口 · 可输入 1–65535' : '端口范围为 1–65535'
+        : '请输入 1–65535 的端口';
+  }
+}
+
 function updateEnhancementMonitorUi() {
   const master = element('enhancementMonitorToggle');
   const i18n = element('i18nToggle');
@@ -88,7 +153,7 @@ function renderPhase(next, targetName = activeTargetName) {
   const isMissing = !currentObj.exists && next === 'idle';
 
   if (isMissing) {
-    element('launchIcon').textContent = '⚠️';
+    element('launchIcon').textContent = '!';
     element('launchText').textContent = `请先配置 ${targetName} 路径`;
     button.style.background = 'var(--surface-subtle)';
     button.style.color = 'var(--text-dark)';
@@ -96,7 +161,7 @@ function renderPhase(next, targetName = activeTargetName) {
   }
 
   button.style.color = '';
-  element('launchIcon').textContent = busy ? '◌' : next === 'running' ? '●' : next === 'error' ? '↻' : '🚀';
+  element('launchIcon').textContent = busy ? '◌' : next === 'running' ? '●' : next === 'error' ? '↻' : '▶';
   element('launchText').textContent = {
     preparing: proxyEnabled ? '正在准备代理环境…' : '正在准备启动环境…',
     launching: `正在启动 ${targetName}…`,
@@ -165,7 +230,104 @@ function renderTargetsUi(targets, currentActive) {
   }
 }
 
+function accountDisplayName(account) {
+  return account.label || account.email || '未命名账号';
+}
+
+function renderAccounts(nextState = accountState) {
+  accountState = {
+    accounts: Array.isArray(nextState?.accounts) ? nextState.accounts : [],
+    currentByTarget: {
+      hub: nextState?.currentByTarget?.hub || null,
+      ide: nextState?.currentByTarget?.ide || null
+    }
+  };
+  const list = element('accountList');
+  const summary = element('accountCurrentSummary');
+  if (!list) return;
+  const currentId = accountState.currentByTarget[activeTarget];
+  const current = accountState.accounts.find(account => account.id === currentId);
+  if (summary) {
+    summary.textContent = current
+      ? `${activeTarget === 'ide' ? 'IDE 版' : '桌面版'}当前：${accountDisplayName(current)}`
+      : `${activeTarget === 'ide' ? 'IDE 版' : '桌面版'}尚未选择当前账号`;
+  }
+  list.replaceChildren();
+  if (!accountState.accounts.length) {
+    const empty = document.createElement('div');
+    empty.className = 'account-empty';
+    empty.textContent = '还没有保存账号，可以先添加一个 OAuth 凭据。';
+    list.appendChild(empty);
+    return;
+  }
+  for (const account of accountState.accounts) {
+    const item = document.createElement('div');
+    item.className = 'account-item' + (account.id === currentId ? ' current' : '');
+
+    const main = document.createElement('div');
+    main.className = 'account-item-main';
+    const title = document.createElement('div');
+    title.className = 'account-item-title';
+    const name = document.createElement('span');
+    name.textContent = accountDisplayName(account);
+    title.appendChild(name);
+    if (account.id === currentId) {
+      const badge = document.createElement('span');
+      badge.className = 'account-current-badge';
+      badge.textContent = '当前';
+      title.appendChild(badge);
+    }
+    const email = document.createElement('span');
+    email.className = 'account-item-meta';
+    email.textContent = account.email || '邮箱未知';
+    main.append(title, email);
+
+    const meta = document.createElement('div');
+    meta.className = 'account-item-meta';
+    const tokenBadge = document.createElement('span');
+    tokenBadge.className = 'account-token-badge';
+    tokenBadge.textContent = account.hasRefreshToken ? '可刷新' : (account.hasAccessToken ? '仅访问令牌' : '缺少令牌');
+    meta.appendChild(tokenBadge);
+    if (account.tokenExpiresAt) {
+      const expiry = document.createElement('span');
+      expiry.textContent = `到期 ${new Date(account.tokenExpiresAt).toLocaleDateString()}`;
+      meta.appendChild(expiry);
+    }
+    main.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'account-item-actions';
+    if (account.id !== currentId) {
+      const switchButton = document.createElement('button');
+      switchButton.type = 'button';
+      switchButton.className = 'clean-btn';
+      switchButton.textContent = '切换';
+      switchButton.title = '退出当前客户端并切换到此账号';
+      switchButton.addEventListener('click', () => runAccountAction(() => switchAccount(account.id)));
+      actions.appendChild(switchButton);
+    }
+    if (account.hasRefreshToken) {
+      const refreshButton = document.createElement('button');
+      refreshButton.type = 'button';
+      refreshButton.className = 'clean-btn';
+      refreshButton.textContent = '刷新';
+      refreshButton.addEventListener('click', () => runAccountAction(() => refreshAccount(account.id)));
+      actions.appendChild(refreshButton);
+    }
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'clean-btn danger';
+    deleteButton.textContent = '删除';
+    deleteButton.addEventListener('click', () => runAccountAction(() => deleteAccount(account.id)));
+    actions.appendChild(deleteButton);
+
+    item.append(main, actions);
+    list.appendChild(item);
+  }
+}
+
 function renderStatus(status) {
+  if (status.accountRiskAcknowledged === true) accountRiskAcknowledged = true;
   if (status.activeTarget) {
     activeTarget = status.activeTarget;
     activeTargetName = status.targetName || (status.activeTarget === 'ide' ? 'Antigravity IDE' : 'Antigravity');
@@ -173,6 +335,10 @@ function renderStatus(status) {
   if (status.targets) {
     currentTargets = status.targets;
     renderTargetsUi(currentTargets, activeTarget);
+  }
+  if (status.accounts) renderAccounts(status.accounts);
+  if (status.oauth && element('accountForm')?.style.display !== 'none') {
+    renderAccountOAuthStatus(status.oauth);
   }
   if (status.enableProxy !== undefined && element('proxyToggle')) {
     element('proxyToggle').checked = status.enableProxy;
@@ -213,7 +379,9 @@ function loadSettings(status) {
   if (status.targets) {
     currentTargets = status.targets;
   }
+  if (status.accounts) renderAccounts(status.accounts);
   element('proxyPortInput').value = status.port;
+  updatePortSelection();
   if (element('proxyToggle')) element('proxyToggle').checked = status.enableProxy !== false;
   element('i18nToggle').checked = status.enableI18n;
   element('contextMonitorToggle').checked = status.enableContextMonitor;
@@ -222,7 +390,418 @@ function loadSettings(status) {
   renderStatus(status);
 }
 
+function stopAccountOAuthPolling() {
+  if (accountOAuthPollTimer) {
+    clearInterval(accountOAuthPollTimer);
+    accountOAuthPollTimer = null;
+  }
+  accountOAuthPollInFlight = false;
+}
+
+function setAccountOAuthStatus(message, kind = '') {
+  const node = element('accountOauthStatus');
+  if (!node) return;
+  node.textContent = message || '';
+  node.className = `account-oauth-status${kind ? ` ${kind}` : ''}`;
+}
+
+function renderAccountOAuthStatus(status = {}) {
+  const input = element('accountLoginUrlInput');
+  const openButton = element('accountOpenLink');
+  const copyButton = element('accountCopyLink');
+  const callbackInput = element('accountCallbackUrlInput');
+  const callbackButton = element('accountCallbackFill');
+  if (input && status.url) input.value = status.url;
+  const state = status.state || 'idle';
+  const active = ['waiting', 'opened', 'exchanging'].includes(state);
+  if (openButton) openButton.disabled = !input?.value || state === 'exchanging';
+  if (copyButton) copyButton.disabled = !input?.value;
+  if (callbackButton) callbackButton.disabled = !callbackInput?.value.trim() || state === 'exchanging';
+
+  const messages = {
+    waiting: '登录链接已生成，点击“打开链接”完成登录。',
+    opened: '登录页面已打开，完成授权后会自动保存账号。',
+    exchanging: '登录成功，正在保存账号…',
+    completed: status.message || '账号已保存。',
+    cancelled: '登录已取消。',
+    error: status.error || status.message || '登录失败，请重新生成链接。'
+  };
+  const kind = state === 'completed' ? 'success' : state === 'error' ? 'error' : '';
+  setAccountOAuthStatus(messages[state] || '正在准备登录链接…', kind);
+  return { state, active };
+}
+
+async function pollAccountOAuth(attempt) {
+  if (accountOAuthPollInFlight || attempt !== accountOAuthAttempt) return;
+  accountOAuthPollInFlight = true;
+  try {
+    const status = await api.accountOAuthStatus();
+    if (attempt !== accountOAuthAttempt) return;
+    const { state, active } = renderAccountOAuthStatus(status);
+    if (state === 'completed') {
+      stopAccountOAuthPolling();
+      const accounts = await api.accounts();
+      if (attempt !== accountOAuthAttempt) return;
+      renderAccounts(accounts);
+      if (status.account?.email) {
+        appendLog('ACCOUNT', `已自动保存网页登录账号 ${status.account.email}`, 'tag-proxy');
+      }
+      window.setTimeout(() => {
+        if (attempt === accountOAuthAttempt && element('accountForm')?.style.display !== 'none') {
+          showAccountForm(false);
+        }
+      }, 900);
+    } else if (!active && state === 'error') {
+      stopAccountOAuthPolling();
+    }
+  } catch (error) {
+    if (attempt === accountOAuthAttempt) {
+      stopAccountOAuthPolling();
+      setAccountOAuthStatus(error.message, 'error');
+    }
+  } finally {
+    accountOAuthPollInFlight = false;
+  }
+}
+
+async function startAccountOAuth() {
+  const attempt = ++accountOAuthAttempt;
+  const input = element('accountLoginUrlInput');
+  const openButton = element('accountOpenLink');
+  const copyButton = element('accountCopyLink');
+  if (input) {
+    input.value = '';
+    input.placeholder = '正在生成登录链接…';
+  }
+  if (openButton) openButton.disabled = true;
+  if (copyButton) copyButton.disabled = true;
+  setAccountOAuthStatus('正在准备登录链接…');
+  stopAccountOAuthPolling();
+  try {
+    const result = await api.startAccountOAuth();
+    if (attempt !== accountOAuthAttempt || element('accountForm')?.style.display === 'none') {
+      await api.cancelAccountOAuth().catch(() => {});
+      return;
+    }
+    if (input) {
+      input.value = result.url || '';
+      input.placeholder = '登录链接暂不可用';
+    }
+    renderAccountOAuthStatus(result);
+    accountOAuthPollTimer = setInterval(() => { void pollAccountOAuth(attempt); }, 800);
+    void pollAccountOAuth(attempt);
+  } catch (error) {
+    if (attempt === accountOAuthAttempt) {
+      stopAccountOAuthPolling();
+      setAccountOAuthStatus(error.message, 'error');
+      report(error);
+    }
+  }
+}
+
+async function openAccountOAuth() {
+  const button = element('accountOpenLink');
+  if (button?.disabled) return;
+  button.disabled = true;
+  try {
+    const result = await api.openAccountOAuth();
+    renderAccountOAuthStatus(result);
+  } catch (error) {
+    setAccountOAuthStatus(error.message, 'error');
+    report(error);
+  } finally {
+    if (element('accountForm')?.style.display !== 'none') {
+      button.disabled = !element('accountLoginUrlInput')?.value;
+    }
+  }
+}
+
+async function copyAccountOAuth() {
+  const input = element('accountLoginUrlInput');
+  const url = input?.value?.trim();
+  if (!url) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      input.focus();
+      input.select();
+      if (!document.execCommand('copy')) throw new Error('当前环境不支持复制');
+      input.setSelectionRange(0, 0);
+    }
+    setAccountOAuthStatus('登录链接已复制，可以粘贴到浏览器中打开。', 'success');
+  } catch (error) {
+    setAccountOAuthStatus('复制失败，请选中链接后手动复制。', 'error');
+    report(error);
+  }
+}
+
+async function completeAccountOAuthFromUrl() {
+  const input = element('accountCallbackUrlInput');
+  const button = element('accountCallbackFill');
+  const callbackUrl = input?.value?.trim();
+  if (!callbackUrl || button?.disabled) return;
+  const attempt = ++accountOAuthAttempt;
+  stopAccountOAuthPolling();
+  if (button) button.disabled = true;
+  setAccountOAuthStatus('正在使用回填链接保存账号…');
+  try {
+    const result = await api.completeAccountOAuth(callbackUrl);
+    if (attempt !== accountOAuthAttempt) return;
+    renderAccountOAuthStatus(result);
+    if (result.state === 'completed') {
+      renderAccounts(await api.accounts());
+      if (result.account?.email) {
+        appendLog('ACCOUNT', `已通过回填链接保存网页登录账号 ${result.account.email}`, 'tag-proxy');
+      }
+      window.setTimeout(() => {
+        if (attempt === accountOAuthAttempt && element('accountForm')?.style.display !== 'none') {
+          showAccountForm(false);
+        }
+      }, 900);
+    }
+  } catch (error) {
+    if (attempt === accountOAuthAttempt) {
+      setAccountOAuthStatus(error.message, 'error');
+      report(error);
+    }
+  } finally {
+    if (attempt === accountOAuthAttempt && element('accountForm')?.style.display !== 'none') {
+      const state = element('accountOauthStatus')?.classList.contains('error') ? 'error' : '';
+      if (button) button.disabled = !input?.value.trim() || state === 'exchanging';
+    }
+  }
+}
+
+function cancelAccountOAuth() {
+  stopAccountOAuthPolling();
+  ++accountOAuthAttempt;
+  void api.cancelAccountOAuth().catch(() => {});
+}
+
+function showAccountForm(visible) {
+  const form = element('accountForm');
+  if (!form) return;
+  if (!visible) {
+    cancelAccountOAuth();
+    form.style.display = 'none';
+    return;
+  }
+  form.style.display = 'block';
+  clearAccountForm();
+  if (visible) {
+    element('accountFormError').textContent = '';
+    startAccountOAuth();
+  }
+}
+
+function clearAccountForm() {
+  for (const id of ['accountEmailInput', 'accountLabelInput', 'accountAccessTokenInput', 'accountRefreshTokenInput', 'accountExpiryInput', 'accountCallbackUrlInput']) {
+    const input = element(id);
+    if (input) input.value = '';
+  }
+  element('accountFormError').textContent = '';
+}
+
+function requestAccountRiskAcknowledgment() {
+  if (accountRiskAcknowledged) return Promise.resolve(true);
+  if (accountRiskResolver) return Promise.resolve(false);
+  const modal = element('accountRiskModal');
+  const checkbox = element('accountRiskCheckbox');
+  if (!modal || !checkbox) return Promise.resolve(false);
+  accountRiskReturnFocus = document.activeElement;
+  checkbox.checked = false;
+  element('accountRiskAccept').disabled = true;
+  element('accountRiskError').hidden = true;
+  modal.style.display = 'flex';
+  const result = new Promise(resolve => { accountRiskResolver = resolve; });
+  checkbox.focus();
+  return result;
+}
+
+function finishAccountRiskAcknowledgment(accepted) {
+  if (accountRiskSaving) return;
+  const resolve = accountRiskResolver;
+  accountRiskResolver = null;
+  element('accountRiskModal').style.display = 'none';
+  const focusTarget = accountRiskReturnFocus?.isConnected ? accountRiskReturnFocus : element('accountAddBtn');
+  accountRiskReturnFocus = null;
+  focusTarget?.focus();
+  resolve?.(accepted);
+}
+
+async function acceptAccountRisk() {
+  const checkbox = element('accountRiskCheckbox');
+  if (!accountRiskResolver || accountRiskSaving || !checkbox?.checked) return;
+  accountRiskSaving = true;
+  const button = element('accountRiskAccept');
+  const errorNode = element('accountRiskError');
+  const modal = element('accountRiskModal');
+  button.disabled = true;
+  button.textContent = '正在保存…';
+  checkbox.disabled = true;
+  element('accountRiskClose').disabled = true;
+  element('accountRiskCancel').disabled = true;
+  errorNode.hidden = true;
+  modal.setAttribute('aria-busy', 'true');
+  try {
+    await api.configure({ accountRiskAcknowledged: true });
+    accountRiskAcknowledged = true;
+  } catch (error) {
+    errorNode.textContent = `确认状态未能保存，请重试：${error.message}`;
+    errorNode.hidden = false;
+  } finally {
+    accountRiskSaving = false;
+    button.textContent = '确认并继续';
+    button.disabled = !checkbox.checked;
+    checkbox.disabled = false;
+    element('accountRiskClose').disabled = false;
+    element('accountRiskCancel').disabled = false;
+    modal.removeAttribute('aria-busy');
+  }
+  if (accountRiskAcknowledged) finishAccountRiskAcknowledgment(true);
+}
+
+async function runAccountAction(action) {
+  if (!await requestAccountRiskAcknowledgment()) return;
+  try { await action(); }
+  catch (error) { report(error); }
+}
+
+function finishAccountConfirmation(confirmed) {
+  const resolver = accountConfirmResolver;
+  accountConfirmResolver = null;
+  const modal = element('accountConfirmModal');
+  if (modal) modal.style.display = 'none';
+  resolver?.(confirmed);
+}
+
+function requestAccountConfirmation({ title, message, confirmText = '确认', danger = false }) {
+  const modal = element('accountConfirmModal');
+  const titleNode = element('accountConfirmTitle');
+  const messageNode = element('accountConfirmMessage');
+  const confirmButton = element('accountConfirmOk');
+  if (!modal || !titleNode || !messageNode || !confirmButton) return Promise.resolve(false);
+  if (accountConfirmResolver) finishAccountConfirmation(false);
+  titleNode.textContent = title;
+  messageNode.textContent = message;
+  confirmButton.textContent = confirmText;
+  confirmButton.classList.toggle('account-confirm-danger', danger);
+  modal.style.display = 'flex';
+  confirmButton.focus();
+  return new Promise(resolve => { accountConfirmResolver = resolve; });
+}
+
+async function saveAccount() {
+  const errorNode = element('accountFormError');
+  const button = element('accountFormSave');
+  const body = {
+    email: element('accountEmailInput').value.trim(),
+    label: element('accountLabelInput').value.trim(),
+    accessToken: element('accountAccessTokenInput').value.trim(),
+    refreshToken: element('accountRefreshTokenInput').value.trim(),
+    expiryTimestamp: element('accountExpiryInput').value.trim()
+  };
+  if (!body.email || (!body.accessToken && !body.refreshToken)) {
+    errorNode.textContent = '请填写邮箱，并至少提供一个 access token 或 refresh token。';
+    return;
+  }
+  button.disabled = true;
+  errorNode.textContent = '';
+  try {
+    const result = await api.addAccount(body);
+    renderAccounts(result.accounts);
+    appendLog('ACCOUNT', `已保存账号 ${body.email}`, 'tag-proxy');
+    clearAccountForm();
+    showAccountForm(false);
+  } catch (error) {
+    errorNode.textContent = error.message;
+    report(error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function importCurrentAccount() {
+  const button = element('accountImportBtn');
+  if (button?.disabled) return;
+  const originalText = button?.textContent || '导入当前登录';
+  if (button) {
+    button.disabled = true;
+    button.textContent = '读取中…';
+  }
+  try {
+    const result = await api.importCurrentAccount(activeTarget);
+    renderAccounts(result.accounts);
+    const source = result.source ? `（${result.source}）` : '';
+    appendLog('ACCOUNT', `已导入当前登录账号 ${result.account.email}${source}`, 'tag-proxy');
+  } catch (error) {
+    report(error);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+
+async function switchAccount(accountId) {
+  const account = accountState.accounts.find(item => item.id === accountId);
+  if (!account) return;
+  const targetName = activeTarget === 'ide' ? 'IDE 版' : '桌面版';
+  const message = clientRunningState || phase !== 'idle'
+    ? `切换到“${accountDisplayName(account)}”会退出当前 ${targetName}，写入新凭据并重新启动。请先保存工作，是否继续？`
+    : `是否将 ${targetName} 切换到“${accountDisplayName(account)}”？`;
+  if (!await requestAccountConfirmation({
+    title: '确认切换账号',
+    message,
+    confirmText: '确认切换'
+  })) return;
+  try {
+    const result = await api.switchAccount({ accountId, target: activeTarget });
+    renderAccounts(result.accounts);
+    renderStatus(await api.status());
+    appendLog('ACCOUNT', result.launched
+      ? `已切换到 ${account.email}，${targetName}正在重新启动`
+      : `已切换到 ${account.email}，请手动启动 ${targetName}`, 'tag-proxy');
+  } catch (error) {
+    report(error);
+    renderAccounts((await api.accounts()).accounts);
+  }
+}
+
+async function refreshAccount(accountId) {
+  try {
+    const result = await api.refreshAccount(accountId);
+    renderAccounts(result.accounts);
+    appendLog('ACCOUNT', `已刷新 ${result.account.email} 的访问凭据`, 'tag-proxy');
+  } catch (error) {
+    report(error);
+  }
+}
+
+async function deleteAccount(accountId) {
+  const account = accountState.accounts.find(item => item.id === accountId);
+  if (!account) return;
+  if (!await requestAccountConfirmation({
+    title: '确认删除账号',
+    message: `确定删除账号“${accountDisplayName(account)}”吗？本地保存的凭据也会一并删除。`,
+    confirmText: '确认删除',
+    danger: true
+  })) return;
+  try {
+    const result = await api.deleteAccount(accountId);
+    renderAccounts(result.accounts);
+    appendLog('ACCOUNT', `已删除账号 ${account.email}`, 'tag-proxy');
+  } catch (error) {
+    report(error);
+  }
+}
+
 function persistSettings() {
+  if (!validatePortInput(true)) {
+    return Promise.reject(new Error(element('portInputError')?.textContent || '代理端口无效'));
+  }
   const payload = {
     port: Number(element('proxyPortInput').value),
     enableProxy: element('proxyToggle') ? element('proxyToggle').checked : true,
@@ -435,6 +1014,7 @@ document.addEventListener('click', event => {
       element('targetIdeBtn')?.classList.toggle('active', activeTarget === 'ide');
       renderTargetsUi(currentTargets, activeTarget);
       renderPhase(phase, activeTargetName);
+      renderAccounts(accountState);
       api.configure({ targetApp: nextTarget }).then(res => {
         if (res?.targetName) activeTargetName = res.targetName;
         renderPhase(phase, activeTargetName);
@@ -446,6 +1026,7 @@ document.addEventListener('click', event => {
   if (!control || control.disabled) return;
   const action = control.dataset.port !== undefined ? async () => {
     element('proxyPortInput').value = control.dataset.port;
+    updatePortSelection();
     await persistSettings();
   } : actions[control.dataset.action];
   if (action) Promise.resolve().then(() => action(control)).catch(report);
@@ -459,14 +1040,65 @@ function dismissPathModal() {
 for (const id of ['modalCloseBtn', 'modalCancelBtn']) {
   element(id)?.addEventListener('click', dismissPathModal);
 }
+element('accountAddBtn')?.addEventListener('click', () => runAccountAction(() => showAccountForm(true)));
+element('accountImportBtn')?.addEventListener('click', () => runAccountAction(importCurrentAccount));
+element('accountRiskCheckbox')?.addEventListener('change', event => {
+  element('accountRiskAccept').disabled = accountRiskSaving || !event.target.checked;
+});
+element('accountRiskAccept')?.addEventListener('click', acceptAccountRisk);
+for (const id of ['accountRiskClose', 'accountRiskCancel']) {
+  element(id)?.addEventListener('click', () => finishAccountRiskAcknowledgment(false));
+}
+element('accountRiskModal')?.addEventListener('click', event => {
+  if (event.target === element('accountRiskModal')) finishAccountRiskAcknowledgment(false);
+});
+element('accountFormClose')?.addEventListener('click', () => showAccountForm(false));
+element('accountFormCancel')?.addEventListener('click', () => showAccountForm(false));
+element('accountOpenLink')?.addEventListener('click', openAccountOAuth);
+element('accountCopyLink')?.addEventListener('click', copyAccountOAuth);
+element('accountCallbackFill')?.addEventListener('click', completeAccountOAuthFromUrl);
+element('accountFormSave')?.addEventListener('click', saveAccount);
+element('accountConfirmClose')?.addEventListener('click', () => finishAccountConfirmation(false));
+element('accountConfirmCancel')?.addEventListener('click', () => finishAccountConfirmation(false));
+element('accountConfirmOk')?.addEventListener('click', () => finishAccountConfirmation(true));
+element('accountCallbackUrlInput')?.addEventListener('input', event => {
+  const button = element('accountCallbackFill');
+  if (button) button.disabled = !event.target.value.trim();
+});
+element('accountCallbackUrlInput')?.addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    completeAccountOAuthFromUrl();
+  }
+});
 element('processModal')?.addEventListener('click', event => {
   if (event.target === element('processModal')) dismissProcessModal();
+});
+element('accountConfirmModal')?.addEventListener('click', event => {
+  if (event.target === element('accountConfirmModal')) finishAccountConfirmation(false);
 });
 element('pathModal')?.addEventListener('click', event => {
   if (event.target === element('pathModal')) dismissPathModal();
 });
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') { dismissPathModal(); dismissProcessModal(); }
+  if (accountRiskResolver) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      finishAccountRiskAcknowledgment(false);
+    } else if (event.key === 'Tab') {
+      const controls = [...element('accountRiskModal').querySelectorAll('button:enabled, input:enabled')];
+      const index = controls.indexOf(document.activeElement);
+      event.preventDefault();
+      controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
+    }
+    return;
+  }
+  if (event.key === 'Escape') {
+    dismissPathModal();
+    dismissProcessModal();
+    showAccountForm(false);
+    finishAccountConfirmation(false);
+  }
 });
 
 element('browseExeBtn')?.addEventListener('click', browseTargetExe);
@@ -479,7 +1111,11 @@ element('customPathInput')?.addEventListener('keydown', e => {
   }
 });
 
-element('proxyPortInput').addEventListener('input', event => { event.target.value = event.target.value.replace(/\D/g, ''); });
+element('proxyPortInput').addEventListener('input', event => {
+  event.target.value = event.target.value.replace(/\D/g, '');
+  updatePortSelection();
+  validatePortInput(false);
+});
 for (const id of ['proxyPortInput', 'proxyToggle', 'i18nToggle', 'contextMonitorToggle', 'enhancementMonitorToggle']) {
   element(id)?.addEventListener('change', () => {
     if (id === 'proxyToggle') updateProxyUi(element('proxyToggle').checked);

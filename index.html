@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Antigravity++ Lite</title>
+  <title>Antigravity++</title>
   <link rel="icon" type="image/png" href="/assets/logo-32.png">
   <link rel="shortcut icon" type="image/png" href="/assets/logo-32.png">
   <link rel="apple-touch-icon" href="/assets/logo-64.png">
@@ -23,12 +23,13 @@
   <!-- 顶部状态栏 -->
   <div class="nav-header">
     <div class="brand">
-      <span class="brand-title">Antigravity++ <span class="edition-tag">Lite</span></span>
-      <button type="button" class="version-pill" id="updateBtn" data-action="check-update" title="检查并拉取 Lite 版最新内核与汉化词典，免重装直接生效">
-        <span id="versionBadge">v4.0.5</span>
-        <span class="version-sep">·</span>
-        <span id="updateActionText">↻ 检查更新</span>
-      </button>
+      <span class="brand-title">Antigravity++</span>
+      <div class="brand-meta">
+        <span class="version-badge" id="versionBadge">v0.1.0</span>
+        <button type="button" class="update-btn" id="updateBtn" data-action="check-update" title="检查并拉取最新内核与汉化词典，免重装直接生效">
+          <span id="updateActionText">↻ 检查更新</span>
+        </button>
+      </div>
     </div>
     <div class="nav-actions">
       <button type="button" class="tray-btn icon-only" id="themeToggleBtn" data-action="toggle-theme" title="切换浅色 / 深色外观（顶栏与面板同步变色）">
@@ -41,55 +42,70 @@
     </div>
   </div>
 
-  <!-- 卡片 1: 原生代理 -->
-  <div class="card">
-    <div class="card-label">网络与免 TUN 链路</div>
-    <div class="row">
-      <span style="font-weight: 500;">免 TUN 进程代理 <span id="patchStatusBadge" style="font-size: 11px; font-weight: 600; color: var(--green);">· 本地代理就绪</span></span>
-      <label class="switch" title="开启后为 AG 进程注入本地代理；直连环境（如海外/台湾/全局VPN用户）可关闭">
-        <input type="checkbox" id="proxyToggle" checked>
-        <span class="slider"></span>
-      </label>
-    </div>
-    <div class="row" id="proxyPortRow">
-      <span style="font-weight: 500;">本地代理端口:</span>
-      <div class="port-cluster">
-        <button type="button" class="quick-tag" data-port="7890" title="7890: Mihomo / Clash 默认端口">
-          7890 <span class="tag-hint">Mihomo</span>
-        </button>
-        <button type="button" class="quick-tag" data-port="7897" title="7897: Clash Verge / Verge Rev 默认端口">
-          7897 <span class="tag-hint">Verge</span>
-        </button>
-        <button type="button" class="quick-tag" data-port="10808" title="10808: v2rayN / Xray 默认端口">
-          10808 <span class="tag-hint">v2ray</span>
-        </button>
-        <input type="text" id="proxyPortInput" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="7890" placeholder="7890">
+  <div class="settings-grid">
+    <!-- 卡片 1: 原生代理 -->
+    <div class="card">
+      <div class="card-label">网络与免 TUN 链路</div>
+      <div class="row">
+        <span class="row-label">免 TUN 进程代理 <span id="patchStatusBadge" class="row-note row-note-success">· 本地代理就绪</span></span>
+        <label class="switch" title="开启后为 AG 进程注入本地代理；直连环境（如海外/台湾/全局VPN用户）可关闭">
+          <input type="checkbox" id="proxyToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="row" id="proxyPortRow">
+        <div class="port-heading">
+          <div class="port-heading-copy">
+            <span class="row-label">本地代理端口</span>
+            <span class="port-helper">选择你正在使用的代理工具端口</span>
+          </div>
+          <span class="port-current-state" id="portCurrentState" aria-live="polite">已选择 7890</span>
+        </div>
+        <div class="port-cluster">
+          <button type="button" class="quick-tag active" data-port="7890" aria-pressed="true" title="选择 7890 作为当前端口：Mihomo / Clash 常用端口">
+            <span class="port-number">7890</span> <span class="tag-hint">Mihomo</span><span class="port-check" aria-hidden="true">✓</span>
+          </button>
+          <button type="button" class="quick-tag" data-port="7897" aria-pressed="false" title="选择 7897 作为当前端口：Clash Verge / Verge Rev 常用端口">
+            <span class="port-number">7897</span> <span class="tag-hint">Verge</span><span class="port-check" aria-hidden="true">✓</span>
+          </button>
+          <button type="button" class="quick-tag" data-port="10808" aria-pressed="false" title="选择 10808 作为当前端口：v2rayN / Xray 常用端口">
+            <span class="port-number">10808</span> <span class="tag-hint">v2ray</span><span class="port-check" aria-hidden="true">✓</span>
+          </button>
+        </div>
+        <label class="port-input-row" for="proxyPortInput">
+          <span class="port-input-copy">
+            <span class="port-input-title">当前端口</span>
+            <span class="port-input-hint" id="portSelectionHint">已选择 Mihomo · 也可输入自定义端口</span>
+          </span>
+          <input type="text" id="proxyPortInput" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="7890" placeholder="输入端口" aria-label="当前代理端口">
+        </label>
+        <div class="port-input-error" id="portInputError" role="alert" aria-live="polite"></div>
       </div>
     </div>
-  </div>
 
-  <!-- 卡片 2: 本地化汉化与上下文、模型用量圆环 -->
-  <div class="card">
-    <div class="row" id="enhancementMonitorRow">
-      <span style="font-weight: 500;">界面深度汉化与监控 <span style="font-size: 11px; color: var(--text-dark);">· 汉化和 AG 内监控</span></span>
-      <label class="switch" title="总开关：同时启用或关闭界面深度汉化和 AG 内上下文、模型用量监控">
-        <input type="checkbox" id="enhancementMonitorToggle" aria-label="界面深度汉化与监控" checked>
-        <span class="slider"></span>
-      </label>
-    </div>
-    <div class="row">
-      <span style="font-weight: 500;">实时 DOM 字典翻译 <span id="dictCountBadge" class="dict-badge">· 已载入词条</span></span>
-      <label class="switch">
-        <input type="checkbox" id="i18nToggle" checked>
-        <span class="slider"></span>
-      </label>
-    </div>
-    <div class="row" id="contextMonitorRow">
-      <span style="font-weight: 500;">AG 内上下文与模型用量 <span style="font-size: 11px; color: var(--text-dark);">· 速度和额度在详情中</span></span>
-      <label class="switch" title="只读采集最近请求的上下文估算和当前模型额度；关闭后移除 AG 内两个标记">
-        <input type="checkbox" id="contextMonitorToggle" aria-label="AG 内上下文与模型用量" checked>
-        <span class="slider"></span>
-      </label>
+    <!-- 卡片 2: 本地化汉化与上下文、模型用量圆环 -->
+    <div class="card">
+      <div class="row" id="enhancementMonitorRow">
+        <span class="row-label">界面深度汉化与监控 <span class="row-note">· 汉化和 AG 内监控</span></span>
+        <label class="switch" title="总开关：同时启用或关闭界面深度汉化和 AG 内上下文、模型用量监控">
+          <input type="checkbox" id="enhancementMonitorToggle" aria-label="界面深度汉化与监控" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="row">
+        <span class="row-label">实时 DOM 字典翻译 <span id="dictCountBadge" class="dict-badge">· 已载入词条</span></span>
+        <label class="switch">
+          <input type="checkbox" id="i18nToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="row" id="contextMonitorRow">
+        <span class="row-label">AG 内上下文与模型用量 <span class="row-note">· 速度和额度在详情中</span></span>
+        <label class="switch" title="只读采集最近请求的上下文估算和当前模型额度；关闭后移除 AG 内两个标记">
+          <input type="checkbox" id="contextMonitorToggle" aria-label="AG 内上下文与模型用量" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
   </div>
 
@@ -99,14 +115,117 @@
     <div class="switcher-pills" role="radiogroup" aria-label="选择启动目标">
       <button type="button" class="target-pill active" data-target="hub" id="targetHubBtn" title="启动 Antigravity 官方桌面客户端">
         <span class="pill-dot" id="hubDot"></span>
-        <span class="pill-icon">💻</span>
+        <span class="pill-icon" aria-hidden="true">▣</span>
         <span>桌面版</span>
       </button>
       <button type="button" class="target-pill" data-target="ide" id="targetIdeBtn" title="启动 Antigravity IDE 编辑器版（基于 VS Code）">
         <span class="pill-dot" id="ideDot"></span>
-        <span class="pill-icon">📝</span>
+        <span class="pill-icon" aria-hidden="true">✎</span>
         <span>IDE 版</span>
       </button>
+    </div>
+  </div>
+
+  <!-- 账号管理 -->
+  <div class="card accounts-card">
+    <div class="account-card-head">
+      <div>
+        <div class="card-label">账号管理</div>
+        <div class="account-card-subtitle" id="accountCurrentSummary">尚未选择当前账号</div>
+      </div>
+      <div class="account-card-actions">
+        <button type="button" class="clean-btn account-import-btn" id="accountImportBtn" title="只读取当前 Antigravity 登录状态并保存到本地账号库">导入当前登录</button>
+        <button type="button" class="clean-btn account-add-btn" id="accountAddBtn">手动添加</button>
+      </div>
+    </div>
+    <div class="account-list" id="accountList">
+      <div class="account-empty">还没有保存账号，可以先添加一个 OAuth 凭据。</div>
+    </div>
+    <div class="account-hint">导入只读取当前登录状态；切换账号会退出当前 Antigravity，写入新账号凭据并重新启动。</div>
+  </div>
+
+  <div class="modal-backdrop" id="accountRiskModal" style="display:none;">
+    <div class="modal-card account-risk-card" role="dialog" aria-modal="true" aria-labelledby="accountRiskTitle" aria-describedby="accountRiskDescription">
+      <div class="modal-head">
+        <div class="modal-title" id="accountRiskTitle">账号管理使用风险提示</div>
+        <button type="button" class="modal-close-btn" id="accountRiskClose" aria-label="关闭风险提示">×</button>
+      </div>
+      <div class="account-risk-description" id="accountRiskDescription">
+        <p class="account-risk-warning">使用账号管理功能可能触发 Google 风控，存在账号受限、停用或封禁的风险。</p>
+        <p class="modal-desc">请遵守您所在地适用的法律法规、Google 服务条款及 Antigravity 相关使用政策，合理使用账号管理功能。</p>
+        <p class="modal-desc">请自行评估并承担使用风险。本项目无法保证账号不会受到限制。</p>
+      </div>
+      <label class="account-risk-check">
+        <input type="checkbox" id="accountRiskCheckbox">
+        <span>我已阅读并理解上述风险，并同意遵守当地法律法规及 Google 相关条款。</span>
+      </label>
+      <p class="account-risk-error" id="accountRiskError" role="alert" hidden></p>
+      <div class="account-risk-note">确认后不再重复提示。</div>
+      <div class="modal-foot">
+        <div class="modal-foot-right">
+          <button type="button" class="btn-modal-cancel" id="accountRiskCancel">暂不使用</button>
+          <button type="button" class="btn-path-action btn-save" id="accountRiskAccept" disabled>确认并继续</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="account-form" id="accountForm" style="display: none;">
+    <div class="account-form-head">
+      <span>登录并添加账号</span>
+      <button type="button" class="modal-close-btn" id="accountFormClose" aria-label="关闭">×</button>
+    </div>
+    <p class="account-oauth-desc">点击“打开链接”在浏览器中完成登录。登录成功后，本地回调会自动识别邮箱并保存账号；如果没有自动完成，可以使用下方的手工回填。</p>
+    <label class="account-link-label">登录链接
+      <input type="text" id="accountLoginUrlInput" readonly spellcheck="false" placeholder="正在生成登录链接…">
+    </label>
+    <div class="account-link-actions">
+      <button type="button" class="btn-path-action btn-save" id="accountOpenLink">打开链接</button>
+      <button type="button" class="btn-modal-cancel" id="accountCopyLink">复制链接</button>
+    </div>
+    <div class="account-oauth-status" id="accountOauthStatus" role="status" aria-live="polite">正在准备登录链接…</div>
+    <div class="account-callback-fill">
+      <label>登录成功后的链接（手工回填）
+        <input type="text" id="accountCallbackUrlInput" autocomplete="off" spellcheck="false" placeholder="粘贴浏览器地址栏中的完整链接">
+      </label>
+      <div class="account-callback-hint">提示：复制登录成功后的链接。</div>
+      <div class="account-callback-actions">
+        <button type="button" class="btn-path-action btn-save" id="accountCallbackFill" disabled>回填登录结果</button>
+      </div>
+    </div>
+    <details class="account-manual-details">
+      <summary>高级选项：手动填写凭据</summary>
+      <p class="account-manual-desc">仅在网页登录无法完成时使用。凭据会写入本地加密账号库。</p>
+      <label>邮箱<input type="email" id="accountEmailInput" autocomplete="off" placeholder="name@example.com"></label>
+      <label>显示名称<input type="text" id="accountLabelInput" autocomplete="off" placeholder="例如：工作账号"></label>
+      <label>Access Token<input type="password" id="accountAccessTokenInput" autocomplete="new-password" placeholder="可选；没有时会尝试使用 refresh token 刷新"></label>
+      <label>Refresh Token<input type="password" id="accountRefreshTokenInput" autocomplete="new-password" placeholder="建议填写，用于后续刷新访问凭据"></label>
+      <label>过期时间<input type="text" id="accountExpiryInput" inputmode="numeric" autocomplete="off" placeholder="Unix 时间戳（秒或毫秒，可选）"></label>
+      <div class="account-form-actions account-manual-actions">
+        <button type="button" class="btn-path-action btn-save" id="accountFormSave">保存账号</button>
+      </div>
+    </details>
+    <div class="account-form-actions">
+      <button type="button" class="btn-modal-cancel" id="accountFormCancel">取消</button>
+    </div>
+    <div class="account-form-error" id="accountFormError" role="alert"></div>
+  </div>
+
+  <div class="modal-backdrop" id="accountConfirmModal" style="display:none;">
+    <div class="modal-card account-confirm-card" role="dialog" aria-modal="true" aria-labelledby="accountConfirmTitle">
+      <div class="modal-head">
+        <div class="modal-title" id="accountConfirmTitle">确认操作</div>
+        <button type="button" class="modal-close-btn" id="accountConfirmClose" aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc" id="accountConfirmMessage"></p>
+      </div>
+      <div class="modal-foot">
+        <div class="modal-foot-right">
+          <button type="button" class="btn-modal-cancel" id="accountConfirmCancel">取消</button>
+          <button type="button" class="btn-path-action btn-save" id="accountConfirmOk">确认</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -114,7 +233,7 @@
 
   <!-- 核心启动按钮 -->
   <button class="launch-btn" id="launchBtn" data-action="launch">
-    <span class="launch-icon" id="launchIcon">🚀</span>
+    <span class="launch-icon" id="launchIcon" aria-hidden="true">▶</span>
     <span id="launchText">启动 Antigravity</span>
   </button>
 
@@ -122,7 +241,7 @@
   <div class="advanced" id="advancedPanel">
     <div class="advanced-head">
       <span>运行日志</span>
-      <div style="display:flex;gap:10px;align-items:center;">
+      <div class="advanced-actions">
         <button type="button" class="clean-btn" data-action="copy-logs">复制日志</button>
         <button type="button" class="clean-btn" data-action="clear-logs">清空</button>
       </div>
@@ -130,7 +249,7 @@
     <div class="advanced-body">
       <div class="console-pane">
         <div class="console" id="consoleBox">
-          <div class="log-line" style="color: var(--text-dark);">[SYSTEM] Antigravity++ 已就绪。</div>
+          <div class="log-line boot-log">[SYSTEM] Antigravity++ 已就绪。</div>
         </div>
       </div>
     </div>

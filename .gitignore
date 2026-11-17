@@ -34,9 +34,15 @@ Thumbs.db
 src-tauri/target/
 src-tauri/gen/
 src-tauri/backend/
+src-tauri/node-lib/
+src-tauri/binaries/antigravity-node-*
 src-tauri/binaries/easyag-node-*
+src-tauri/binaries/libnode*.dylib
 easyag.log*
 settings.json
+accounts.json
+account-secrets.json
+account-secrets.key
 
 # EasyAG runtime artifacts
 ask-injected.flag

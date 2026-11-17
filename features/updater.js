@@ -60,7 +60,7 @@ function requestDirect(targetUrl, timeoutMs = 10000, redirects = 3) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(targetUrl);
     const client = parsed.protocol === 'https:' ? https : http;
-    const req = client.get(parsed, { timeout: timeoutMs, headers: { 'User-Agent': 'Antigravity++-Updater/4.0' } }, async res => {
+    const req = client.get(parsed, { timeout: timeoutMs, headers: { 'User-Agent': 'Antigravity++-Updater/0.1' } }, async res => {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
         res.resume();
         try {
@@ -91,7 +91,7 @@ function requestViaHttpProxy(targetUrl, proxyPort, timeoutMs = 10000, redirects 
         method: 'GET',
         path: parsed.toString(),
         timeout: timeoutMs,
-        headers: { Host: parsed.host, 'User-Agent': 'Antigravity++-Updater/4.0' }
+        headers: { Host: parsed.host, 'User-Agent': 'Antigravity++-Updater/0.1' }
       }, async res => {
         if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
           res.resume();
@@ -135,7 +135,7 @@ function requestViaHttpProxy(targetUrl, proxyPort, timeoutMs = 10000, redirects 
         method: 'GET',
         createConnection: () => tlsSocket,
         timeout: timeoutMs,
-        headers: { Host: parsed.host, 'User-Agent': 'Antigravity++-Updater/4.0', Connection: 'close' }
+        headers: { Host: parsed.host, 'User-Agent': 'Antigravity++-Updater/0.1', Connection: 'close' }
       }, async httpsRes => {
         if ([301, 302, 307, 308].includes(httpsRes.statusCode) && httpsRes.headers.location && redirects > 0) {
           httpsRes.resume();
@@ -212,12 +212,14 @@ class Updater {
   }
 
   currentState() {
-    const bundledPkg = readJson(path.join(this.rootDir, 'package.json'), { version: '4.0.4', edition: 'lite' });
+    const bundledPkg = readJson(path.join(this.rootDir, 'package.json'), { version: '0.1.0', edition: 'plusplus' });
     const saved = readJson(this.stateFile, {});
-    const bundledVersion = bundledPkg.version || '4.0.4';
+    const bundledVersion = bundledPkg.version || '0.1.0';
+    const edition = bundledPkg.edition || 'plusplus';
+    const savedVersion = saved.edition === edition ? saved.runtimeVersion : null;
     return {
-      edition: bundledPkg.edition || 'lite',
-      version: compareVersions(saved.runtimeVersion || '0.0.0', bundledVersion) > 0 ? saved.runtimeVersion : bundledVersion,
+      edition,
+      version: compareVersions(savedVersion || '0.0.0', bundledVersion) > 0 ? savedVersion : bundledVersion,
       bundledVersion,
       dictVersion: saved.dictVersion || '内置词典',
       lastCheckedAt: saved.lastCheckedAt || null,
@@ -321,6 +323,7 @@ class Updater {
       }
 
       const nextState = {
+        edition: state.edition,
         runtimeVersion: runtimeFilesUpdated > 0 ? manifest.runtime.version : state.version,
         dictVersion: manifest.dictVersion || state.dictVersion,
         lastCheckedAt: new Date().toISOString(),

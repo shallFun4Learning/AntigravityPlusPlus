@@ -1,10 +1,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-/** Explicit runtime resources for Lite base; includes package.json for version comparison during hot updates. */
+/** Explicit runtime resources for the standalone base; includes package.json for version comparison during hot updates. */
 function copyBackendResources(root, destination) {
   fs.mkdirSync(destination, { recursive: true });
-  for (const name of ['server.js', 'index.html', 'package.json', 'THIRD-PARTY-NOTICES.md', 'dicts', 'core', 'features', 'adapters', 'desktop', 'ui']) {
+  for (const name of ['server.js', 'index.html', 'package.json', 'LICENSE', 'THIRD-PARTY-NOTICES.md', 'dicts', 'core', 'features', 'adapters', 'desktop', 'ui']) {
     fs.cpSync(path.join(root, name), path.join(destination, name), { recursive: true });
   }
   fs.mkdirSync(path.join(destination, 'assets'), { recursive: true });

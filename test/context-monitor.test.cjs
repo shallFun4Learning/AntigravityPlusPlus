@@ -73,6 +73,31 @@ test('read-only RPC uses loopback credentials in headers and bounds allowed meth
   client.reset(); assert.equal(client.server, null);
 });
 
+test('desktop discovery probes PID-owned ports when the startup log is truncated', async t => {
+  const received = [];
+  const server = http.createServer((request, response) => {
+    received.push({ path: request.url, token: request.headers['x-codeium-csrf-token'] });
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify({ userStatus: { email: 'account@example.test' } }));
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+
+  const port = server.address().port;
+  const client = new LanguageService({
+    profile: 'unused',
+    processes: async () => [{
+      pid: 9,
+      command: 'language_server --standalone --csrf_token=private',
+      ports: new Set([port])
+    }],
+    readLog: async () => 'recent log entries without the startup port\n'
+  });
+  assert.deepEqual(await client.discover(), { pid: 9, port, csrf: 'private' });
+  assert.equal(received.length, 1);
+  assert.equal(received[0].token, 'private');
+});
+
 test('metadata pagination is complete, bounded and conversation-specific; no steps are returned', async () => {
   const client = new LanguageService();
   const calls = [];

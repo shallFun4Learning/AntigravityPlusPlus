@@ -97,8 +97,8 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
         &[&show, &web, &PredefinedMenuItem::separator(app)?, &quit],
     )?;
 
-    let mut builder = TrayIconBuilder::with_id("easyag-tray")
-        .tooltip("Antigravity++ Lite")
+    let mut builder = TrayIconBuilder::with_id("antigravity-tray")
+        .tooltip("Antigravity++")
         .menu(&menu)
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -150,7 +150,7 @@ fn start_backend(app: &tauri::AppHandle) -> Result<u16, Box<dyn std::error::Erro
     if ready.exists() {
         fs::remove_file(&ready)?;
     }
-    let runtime = exe_dir.join(if cfg!(windows) { "easyag-node.exe" } else { "easyag-node" });
+    let runtime = exe_dir.join(if cfg!(windows) { "antigravity-node.exe" } else { "antigravity-node" });
     if !runtime.exists() {
         return Err(format!("Missing Node runtime at {}", runtime.display()).into());
     }
@@ -275,7 +275,7 @@ fn main() {
             let _ = setup_tray(app);
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_title("Antigravity++ Lite (macOS)");
+                let _ = window.set_title("Antigravity++");
             }
             let handle = app.handle().clone();
             std::thread::spawn(move || match start_backend(&handle) {

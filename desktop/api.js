@@ -49,6 +49,66 @@ function createApi(app) {
       }
       if (method === 'GET' && route === '/api/ping') { response.end('pong'); return; }
       if (method === 'GET' && route === '/api/status') return json(response, app.status());
+      if (method === 'GET' && route === '/api/accounts') return json(response, app.accountManager.list());
+      if (method === 'POST' && route === '/api/accounts/oauth/start') {
+        const data = await readBody(request);
+        const result = await app.oauthLogin.start(data.clientKey);
+        return json(response, result);
+      }
+      if (method === 'POST' && route === '/api/accounts/oauth/open') {
+        const result = await app.oauthLogin.open();
+        return json(response, result);
+      }
+      if (method === 'POST' && route === '/api/accounts/oauth/cancel') {
+        const result = await app.oauthLogin.cancel();
+        return json(response, result);
+      }
+      if (method === 'POST' && route === '/api/accounts/oauth/complete') {
+        const data = await readBody(request);
+        const callbackUrl = data.url || data.callbackUrl || data.link;
+        const result = await app.oauthLogin.completeFromCallbackUrl(callbackUrl);
+        return json(response, result);
+      }
+      if (method === 'GET' && route === '/api/accounts/oauth/status') {
+        return json(response, app.oauthLogin.status());
+      }
+      if (method === 'POST' && route === '/api/accounts/add') {
+        const data = await readBody(request);
+        const account = app.accountManager.add(data);
+        return json(response, { ok: true, account, accounts: app.accountManager.list() });
+      }
+      if (method === 'POST' && route === '/api/accounts/import-current') {
+        const data = await readBody(request);
+        const result = await app.accountManager.importCurrent(data.target);
+        return json(response, { ...result, accounts: app.accountManager.list() });
+      }
+      if (method === 'POST' && route === '/api/accounts/switch') {
+        const data = await readBody(request);
+        const accountId = data.accountId || data.id;
+        if (typeof accountId !== 'string' || !accountId.trim()) {
+          return json(response, { ok: false, error: '缺少账号 ID' }, 400);
+        }
+        const result = await app.accountManager.switch(accountId, data.target);
+        return json(response, { ...result, accounts: app.accountManager.list() });
+      }
+      if (method === 'POST' && route === '/api/accounts/delete') {
+        const data = await readBody(request);
+        const accountId = data.accountId || data.id;
+        if (typeof accountId !== 'string' || !accountId.trim()) {
+          return json(response, { ok: false, error: '缺少账号 ID' }, 400);
+        }
+        const result = await app.accountManager.remove(accountId);
+        return json(response, { ...result, accounts: app.accountManager.list() });
+      }
+      if (method === 'POST' && route === '/api/accounts/refresh') {
+        const data = await readBody(request);
+        const accountId = data.accountId || data.id;
+        if (typeof accountId !== 'string' || !accountId.trim()) {
+          return json(response, { ok: false, error: '缺少账号 ID' }, 400);
+        }
+        const account = await app.accountManager.refresh(accountId);
+        return json(response, { ok: true, account, accounts: app.accountManager.list() });
+      }
       if (method === 'GET' && route === '/api/logs') {
         const limit = Number.parseInt(url.searchParams.get('limit') || '100', 10);
         return json(response, app.events.logs(Number.isFinite(limit) ? limit : 100));

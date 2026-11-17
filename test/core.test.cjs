@@ -6,7 +6,7 @@ const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { Session } = require('../core/session');
 const { writeJson } = require('../core/storage');
-const { normalizeSettings, assertLaunchSettingsMutable } = require('../core/settings');
+const { createSettings, normalizeSettings, assertLaunchSettingsMutable } = require('../core/settings');
 const { loadDictionary } = require('../features/i18n');
 const { Updater, sha256Hex, isAllowedRuntimePath, resolveRuntimeRoot } = require('../features/updater');
 
@@ -16,7 +16,11 @@ function sessionFixture({ spawnError = false, alreadyRunning = false } = {}) {
   child.pid = 123; child.exitCode = null; child.kill = () => calls.push('kill');
   const session = new Session({
     settings: { get: () => ({ port: 7890, enableI18n: true, enableContextMonitor: true }) },
-    desktop: { locate: () => ({ exists: true, appExe: 'test' }), running: async () => alreadyRunning },
+    desktop: {
+      locate: () => ({ id: 'hub', name: 'Antigravity', exists: true, appExe: 'test' }),
+      running: async () => alreadyRunning,
+      stop: async () => ({ ok: true })
+    },
     cdp: { port: 9333, start: () => calls.push('cdp'), stop: async () => calls.push('stop-cdp') },
     events: { log() {}, publish() {} }, host: { hide() {} },
     spawnProcess() { calls.push('spawn'); process.nextTick(() => child.emit(spawnError ? 'error' : 'spawn', new Error('spawn failed'))); return child; }
@@ -63,13 +67,24 @@ test('An already open AG is not re-spawned on launch', async () => {
   assert.equal(running.calls.includes('spawn'), false);
 });
 
+test('Session can stop without immediately relaunching', async () => {
+  const { session, calls } = sessionFixture();
+  assert.equal((await session.launch()).ok, true);
+  const stopped = await session.stopOnly();
+  assert.equal(stopped.ok, true);
+  assert.equal(session.phase, 'idle');
+  assert.equal(calls.filter(call => call === 'spawn').length, 1);
+  assert.equal(calls.filter(call => call === 'stop-cdp').length >= 1, true);
+});
+
 test('Settings validate values and lock port only while running', () => {
   assert.throws(() => normalizeSettings({ port: '7890xyz' }));
   assert.throws(() => normalizeSettings({ enableI18n: 'false' }));
   assert.throws(() => normalizeSettings({ enableContextMonitor: 'true' }));
   assert.throws(() => normalizeSettings({ enableProxy: 'true' }));
+  assert.throws(() => normalizeSettings({ accountRiskAcknowledged: 'true' }));
   const normalized = normalizeSettings({ port: 7897, enableI18n: false, enableContextMonitor: true });
-  assert.deepEqual(normalized, { port: 7897, enableI18n: false, enableContextMonitor: true, enableProxy: true, targetApp: 'auto', customHubPath: '', customIdePath: '' });
+  assert.deepEqual(normalized, { port: 7897, enableI18n: false, enableContextMonitor: true, enableProxy: true, accountRiskAcknowledged: false, targetApp: 'auto', customHubPath: '', customIdePath: '' });
   assert.throws(() => normalizeSettings({ customHubPath: 123 }));
   assert.throws(() => normalizeSettings({ customIdePath: true }));
   assert.throws(() => assertLaunchSettingsMutable({ customHubPath: 'D:\\custom' }, normalized, 'running'));
@@ -91,6 +106,21 @@ test('buildProxyLaunch respects enableProxy=false for direct connection', () => 
   assert.doesNotThrow(() => assertLaunchSettingsMutable({ targetApp: 'ide' }, normalized, 'idle'));
   assert.throws(() => assertLaunchSettingsMutable({ port: 10808 }, normalized, 'running'));
   assert.doesNotThrow(() => assertLaunchSettingsMutable({ enableI18n: true, enableContextMonitor: false }, normalized, 'running'));
+});
+
+test('account risk acknowledgment persists across settings reloads and unrelated changes', t => {
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'antigravityplusplus-risk-'));
+  t.after(() => fs.rmSync(data, { recursive: true, force: true }));
+  const file = path.join(data, 'settings.json');
+  writeJson(file, { port: 7897 });
+  const settings = createSettings(file);
+  assert.equal(settings.get().accountRiskAcknowledged, false);
+  assert.doesNotThrow(() => assertLaunchSettingsMutable({ accountRiskAcknowledged: true }, settings.get(), 'running'));
+  settings.update({ accountRiskAcknowledged: true });
+  const reopened = createSettings(file);
+  assert.equal(reopened.get().accountRiskAcknowledged, true);
+  reopened.update({ enableI18n: false });
+  assert.equal(createSettings(file).get().accountRiskAcknowledged, true);
 });
 
 test('Session supports selecting Antigravity IDE and handles target-specific launch', async () => {
@@ -141,13 +171,15 @@ test('Installing a newer full package keeps its version above stale hot-update s
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
   const rootDir = path.join(temp, 'root');
   const dataDir = path.join(temp, 'data');
-  writeJson(path.join(rootDir, 'package.json'), { version: '4.0.4', edition: 'lite' });
-  writeJson(path.join(dataDir, 'hotfix/update-state.json'), { runtimeVersion: '4.0.3', dictVersion: 'saved-dictionary' });
+  writeJson(path.join(rootDir, 'package.json'), { version: '0.1.0', edition: 'plusplus' });
+  writeJson(path.join(dataDir, 'hotfix/update-state.json'), { edition: 'plusplus', runtimeVersion: '0.0.9', dictVersion: 'saved-dictionary' });
   const updater = new Updater({ rootDir, dataDir });
-  assert.equal(updater.currentState().version, '4.0.4');
+  assert.equal(updater.currentState().version, '0.1.0');
   assert.equal(updater.currentState().dictVersion, 'saved-dictionary');
-  writeJson(path.join(dataDir, 'hotfix/update-state.json'), { runtimeVersion: '4.0.5' });
-  assert.equal(updater.currentState().version, '4.0.5');
+  writeJson(path.join(dataDir, 'hotfix/update-state.json'), { edition: 'plusplus', runtimeVersion: '0.1.1' });
+  assert.equal(updater.currentState().version, '0.1.1');
+  writeJson(path.join(dataDir, 'hotfix/update-state.json'), { edition: 'lite', runtimeVersion: '4.0.5' });
+  assert.equal(updater.currentState().version, '0.1.0');
 });
 
 test('Updater verifies SHA-256 for dictionary and runtime overlays and supports rollback', async t => {
