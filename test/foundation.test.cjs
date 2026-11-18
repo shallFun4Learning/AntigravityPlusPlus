@@ -52,6 +52,7 @@ async function start() {
     assert.equal(status.port, 7890);
     assert.equal(status.enableI18n, true);
     assert.equal(status.enableContextMonitor, true);
+    assert.equal(status.enableQuotaMonitor, true);
     assert.equal(status.enableProxy, true);
     assert.equal(status.accountRiskAcknowledged, false);
     assert.ok(status.dictEntries > 100, '词典应已加载');
@@ -121,6 +122,7 @@ async function start() {
     assert.equal(status2.port, 7897);
     assert.equal(status2.enableI18n, false);
     assert.equal(status2.enableContextMonitor, false);
+    assert.equal(status2.enableQuotaMonitor, true);
     assert.equal(status2.enableProxy, false);
     assert.equal(status2.targetApp, 'ide');
     assert.equal(status2.activeTarget, 'ide');

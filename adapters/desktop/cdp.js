@@ -161,16 +161,17 @@ class CdpHub {
   }
 
   async metrics(connection, contextId, event) {
-    if (connection.metricsBusy || Date.now() - (connection.metricsAt || 0) < 1200) return;
-    connection.metricsBusy = true;
-    connection.metricsAt = Date.now();
-    const generation = connection.injectGeneration;
-    // Direct callers from the existing bridge/tests omit `type`; preserve their
-    // historical context-metrics behavior while quota-only bridge events opt in.
     const contextMetrics = event.type !== 'quota-metrics';
+    const channels = connection.metricsChannels ||= {};
+    const channel = channels[contextMetrics ? 'context' : 'quota'] ||= {};
+    if (channel.busy || Date.now() - (channel.at || 0) < 1200) return;
+    channel.busy = true;
+    channel.at = Date.now();
+    const generation = connection.injectGeneration;
     const conversationId = contextMetrics ? event.conversationId?.toLowerCase() : null;
     try {
-      const location = await connection.command('Runtime.evaluate', { expression: `({ href: location.href, conversationId: (${currentConversationId.toString()})(window, document, ${JSON.stringify(this.target)}) })`, contextId, returnByValue: true });
+      const route = contextMetrics ? `(${currentConversationId.toString()})(window, document, ${JSON.stringify(this.target)})` : 'null';
+      const location = await connection.command('Runtime.evaluate', { expression: `({ href: location.href, conversationId: ${route} })`, contextId, returnByValue: true });
       const href = location.result?.value?.href;
       if (!this.running || !connection.contexts.has(contextId) || !validTarget({ type: 'page', url: href,
         webSocketDebuggerUrl: connection.url }, Number(new URL(connection.url).port))) return;
@@ -190,13 +191,14 @@ class CdpHub {
       await connection.command('Runtime.evaluate', { contextId,
         expression: `if (location.href === ${JSON.stringify(href)} && ${routeCheck}) window.__easyagContext?.receive(${JSON.stringify(event.requestId)}, ${payload});` });
     } catch { /* Stats are optional; never interrupt localization. */ }
-    finally { connection.metricsBusy = false; }
+    finally { channel.busy = false; }
   }
 
   async inject(connection) {
     if (!this.running) throw new Error('CDP 已停止');
     const source = this.source(this.binding, this.target);
     connection.injectGeneration = (connection.injectGeneration || 0) + 1;
+    connection.metricsChannels = {};
     if (connection.script) await connection.command('Page.removeScriptToEvaluateOnNewDocument', { identifier: connection.script });
     connection.script = (await connection.command('Page.addScriptToEvaluateOnNewDocument', { source })).identifier;
     if (!this.running) throw new Error('CDP 已停止');

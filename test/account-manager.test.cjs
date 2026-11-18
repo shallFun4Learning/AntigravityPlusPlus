@@ -45,7 +45,7 @@ function fixture(t, {
       }
     },
     session,
-    events: { log: (...args) => calls.push(args) },
+    events: { log: (...args) => calls.push(args), publish: event => calls.push(event) },
     configure: async input => {
       currentSettings = { ...currentSettings, ...input };
       calls.push({ configure: input });
@@ -76,6 +76,16 @@ test('account manager switches account without launching an unavailable target',
   assert.equal(first.email, 'one@example.com');
 });
 
+test('switching an IDE account cannot stop a running desktop session', async t => {
+  const { manager, session, calls } = fixture(t, { targetExists: true });
+  const account = manager.add({ email: 'work@example.com', accessToken: 'fixture' });
+  session.phase = 'running';
+  session.activeTarget = { id: 'hub' };
+  await assert.rejects(manager.switch(account.id, 'ide'), /另一个客户端正在运行/);
+  assert.equal(session.phase, 'running');
+  assert.ok(!calls.some(call => call === 'stop' || call === 'launch' || call.write));
+});
+
 test('account manager stops a running session before switching and launches when target exists', async t => {
   const { manager, session, calls } = fixture(t, { targetExists: true });
   const account = manager.add({ email: 'one@example.com', accessToken: 'one' });
@@ -92,6 +102,8 @@ test('account manager restarts an already running Antigravity even before sessio
   assert.equal(result.launched, true);
   assert.deepEqual(calls.filter(item => item === 'desktop-stop'), ['desktop-stop']);
   assert.deepEqual(calls.filter(item => item === 'launch'), ['launch']);
+  assert.deepEqual(calls.filter(item => item.accountSwitch).map(item => item.accountSwitch.stage),
+    ['checking', 'stopping', 'writing', 'launching', 'complete']);
 });
 
 test('account manager still relaunches when a running target has stale path metadata', async t => {
@@ -110,6 +122,28 @@ test('failed credential write restores the previous current account', async t =>
   await manager.switch(good.id, 'hub');
   await assert.rejects(() => manager.switch(broken.id, 'hub'), /模拟凭据写入失败/);
   assert.equal(manager.current('hub').account.id, good.id);
+  assert.equal(manager.switchStatus.state, 'failed');
+  assert.equal(manager.switchStatus.stage, 'writing');
+});
+
+test('a pending restart preserves the current badge and prevents concurrent switches', async t => {
+  const { manager, session } = fixture(t, { targetExists: true });
+  const original = manager.add({ email: 'current@example.com', accessToken: 'current' });
+  const next = manager.add({ email: 'next@example.com', accessToken: 'next' });
+  await manager.switch(original.id, 'hub');
+  const entered = Promise.withResolvers();
+  const release = Promise.withResolvers();
+  session.launch = async () => { entered.resolve(); return release.promise; };
+  const switching = manager.switch(next.id, 'hub');
+  await entered.promise;
+  assert.equal(manager.switchStatus.stage, 'launching');
+  assert.equal(manager.current('hub').account.id, original.id);
+  await assert.rejects(() => manager.switch(next.id, 'ide'), /正在切换/);
+  release.resolve({ ok: true });
+  await switching;
+  assert.equal(manager.current('hub').account.id, next.id);
+  assert.equal(manager.current('ide').account, null);
+  assert.equal(manager.switchStatus.state, 'done');
 });
 
 test('imports current credentials into the encrypted account store without returning secrets', async t => {

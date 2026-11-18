@@ -1,6 +1,6 @@
 {
   "edition": "plusplus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "dictVersion": "2026-11-17-hotfix1",
   "dicts": {
     "ui_v2.json": {
@@ -13,7 +13,7 @@
     }
   },
   "runtime": {
-    "version": "0.1.0",
+    "version": "0.1.1",
     "files": {
       "server.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/server.js",
@@ -21,7 +21,7 @@
       },
       "index.html": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/index.html",
-        "sha256": "9f9b1cc5dd1d2fe4eb8eaf84fdc33907659d713113710a1533989d82d1b4d2cf"
+        "sha256": "7d09f2fa2a479cdb90f6c3fe0b029d2717e123b82cac2a515c5f21e436c42f87"
       },
       "core/events.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/core/events.js",
@@ -29,7 +29,7 @@
       },
       "core/account-manager.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/core/account-manager.js",
-        "sha256": "4d19d54e15dae2170dc54baab95ee703c954b640f476e7685b6c2558b73c3dc1"
+        "sha256": "15889db2c6d87782d30633e3c5d6494bc4ff8bf297a31313d9bb8556275bb52a"
       },
       "core/accounts.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/core/accounts.js",
@@ -41,11 +41,11 @@
       },
       "core/session.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/core/session.js",
-        "sha256": "d77d58738203a260a15896e8016b439448cccdb94c67c513a2700c52b5906192"
+        "sha256": "2989870781c506b765ed607401729ae3e3d81f49100ca79716f0d18adab105c0"
       },
       "core/settings.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/core/settings.js",
-        "sha256": "7d6430cbc8e6b994b5e36cc2c5c452b9e8d80f7a4903d70dac9161d7abc200af"
+        "sha256": "0460f379d799be32aabffdb218689a36bd563fcfcb8a3fbf79167b1b057f33e3"
       },
       "core/storage.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/core/storage.js",
@@ -57,15 +57,15 @@
       },
       "features/context-monitor.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/features/context-monitor.js",
-        "sha256": "85ad5c4c23483958db5b2b00c3195490387e566a58aa8af82fe87a722386ee8c"
+        "sha256": "81d2320605511545e17321aee3c398ea873dcf045428b8df5e25ac04490940c6"
       },
       "features/quota-monitor.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/features/quota-monitor.js",
-        "sha256": "9d605ace77b9aff4c33d27ce0a3ecad92872b75c62330fb17c301b37ff2cc930"
+        "sha256": "d417453f48da214814828f19e0cea08e8b3fae432e08cc65a21eb19d5ab31991"
       },
       "features/context-widget.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/features/context-widget.js",
-        "sha256": "5b4f65168d474eddfed32de0645f31b58999d2bdf94c0ca8c505e1e6daaa594b"
+        "sha256": "4d05a46004307cda296e5deb314bfd496bf4dc1f0fc48f226e017a1db7fea10a"
       },
       "features/conversation-context.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/features/conversation-context.js",
@@ -93,7 +93,7 @@
       },
       "adapters/desktop/cdp.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/adapters/desktop/cdp.js",
-        "sha256": "a7a5eac50f536e7da20ebcf8112029291059e4cc16bc6e7955b21d68c8896a69"
+        "sha256": "7ada3200b4b6b033425d95c887e9bbc940ead2a1421d4ae8267edc14a0a35f93"
       },
       "adapters/desktop/discovery.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/adapters/desktop/discovery.js",
@@ -121,15 +121,15 @@
       },
       "adapters/desktop/renderer.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/adapters/desktop/renderer.js",
-        "sha256": "ea1cf88d1f8e2b553b9abc8a1b389dfd6510f9e7a8adbe8fc384486ffc6de35d"
+        "sha256": "3f52874f733b78fed2e4eaf18c4a3c35a5a3bd56874e12ac21b937c3a4a92f6c"
       },
       "desktop/api.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/desktop/api.js",
-        "sha256": "bf7184228dd636bf2ea5150dbbd1b4db3ae878288d32604960d76261d68c67e9"
+        "sha256": "3f0a32fddba8d4f7d2edbac5cc02145cb99925c7deea96dcfa030e9e67cb1fe6"
       },
       "desktop/application.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/desktop/application.js",
-        "sha256": "4900f42cf0d7d91092e9aba6f849d10b593da9e146dd2dc52d7de1e8984a27bb"
+        "sha256": "e62cef4635e5487423dd0d4a08de721ec0c63867f6a6460294de6168eb474538"
       },
       "desktop/host.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/desktop/host.js",
@@ -137,15 +137,19 @@
       },
       "ui/api.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/ui/api.js",
-        "sha256": "5f62fdbdafc352d397bcaaa290564ace263e44f6f534b2a0d7f319cbaf50425f"
+        "sha256": "3bffd0a325db3705a8af13699b44a228dd71d06fb14cbc883521aecd7b7769bd"
       },
       "ui/launcher.css": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/ui/launcher.css",
-        "sha256": "139fc1dd66d0388bf9835dfa2e20935ec94a5dfc1d0ab58d5abd7009c8ec03b2"
+        "sha256": "783092c6cc6e8ebb83fbb994f6f94f0d39ad8ff5d0579fb6c561fd28e0e062a4"
       },
       "ui/launcher.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/ui/launcher.js",
-        "sha256": "e6ea80e1f4c4913889d78f7f6183734c188768897a074d9f8e6ccde9d91988ba"
+        "sha256": "398464c7b52725c8ebdd17e8c7d78428157390a481aaff0116a2846965b01bb3"
+      },
+      "ui/workspace.js": {
+        "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/ui/workspace.js",
+        "sha256": "52d48ae9c2aed7d10cadf290f9a705a171836726c87cb10514f13ef114db5adc"
       }
     }
   }

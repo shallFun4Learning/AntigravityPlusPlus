@@ -62,6 +62,7 @@ async function stop(child, eof = false) {
     assert.equal(status.port, 7897);
     assert.equal(status.enableI18n, false);
     assert.equal(status.enableContextMonitor, false);
+    assert.equal(status.enableQuotaMonitor, true);
     await stop(child, true);
     assert.ok(fs.readFileSync(path.join(data, 'easyag.log'), 'utf8').includes('原生宿主管道关闭'));
     console.log('PASS: resources, defaults, >30s idle, SSE disconnect, settings, explicit close and owner EOF');

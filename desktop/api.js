@@ -160,11 +160,13 @@ function createApi(app) {
         return json(response, { ok: true, path: targetPath, settings: app.settings.get(), status: app.status() });
       }
       if (method === 'POST' && route === '/api/launch') {
-        const result = await app.session.launch();
+        const { target } = await readBody(request);
+        const result = await app.session.launch(target);
         return json(response, result, result.ok ? 200 : 409);
       }
       if (method === 'POST' && route === '/api/clean-and-launch') {
-        const result = await app.session.cleanAndLaunch();
+        const { target } = await readBody(request);
+        const result = await app.session.cleanAndLaunch(target);
         return json(response, result, result.ok ? 200 : 409);
       }
       if (method === 'POST' && route === '/api/update') {

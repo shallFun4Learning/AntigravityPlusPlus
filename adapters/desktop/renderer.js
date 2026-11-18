@@ -10,9 +10,9 @@ function rendererSource(dictionary, settings, binding, target = 'hub') {
     function mount() {
       if (window.__easyagMountGeneration !== generation) return;
       ${target === 'ide' ? 'window.__easyagI18n?.dispose();' : `(${installI18n.toString()})(window, document, ${JSON.stringify(dictionary)}, ${settings.enableI18n});`}
-      (${installContextWidget.toString()})(window, document, ${settings.enableContextMonitor === true}, event => {
+      (${installContextWidget.toString()})(window, document, ${JSON.stringify({ context: settings.enableContextMonitor === true, quota: settings.enableQuotaMonitor === true })}, event => {
         if (typeof window[${JSON.stringify(binding)}] === 'function') window[${JSON.stringify(binding)}](JSON.stringify(event));
-      }, (win, doc) => (${currentConversationId.toString()})(win, doc, ${JSON.stringify(target)}));
+      }, (win, doc) => (${currentConversationId.toString()})(win, doc, ${JSON.stringify(target)}), ${JSON.stringify(binding)});
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
     else mount();

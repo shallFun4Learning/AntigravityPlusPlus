@@ -152,6 +152,31 @@ test('context monitoring remains optional and can be toggled while running', () 
   assert.doesNotThrow(() => assertLaunchSettingsMutable({ enableContextMonitor: false }, normalizeSettings(), 'running'));
 });
 
+test('the application samples and clears only the requested enabled monitor', async t => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const { createApplication } = require('../desktop/application');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'monitor-routing-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const app = createApplication({ rootDir: path.resolve(__dirname, '..'), dataDir: dir });
+  // No server or session is started. Only these two synthetic samplers are callable.
+  app.session.phase = 'running';
+  const samples = [], resets = [];
+  app.contextMonitor.sample = async () => { samples.push('context'); return { conversationId: id }; };
+  app.quotaMonitor.sample = async () => { samples.push('quota'); return { groups: [] }; };
+  app.contextMonitor.reset = () => resets.push('context');
+  app.quotaMonitor.reset = () => resets.push('quota');
+  for (const context of [true, false]) for (const quota of [true, false]) {
+    const old = app.settings.get();
+    await app.configure({ enableContextMonitor: context, enableQuotaMonitor: quota });
+    assert.deepEqual(resets.splice(0), [
+      ...(old.enableContextMonitor !== context ? ['context'] : []), ...(old.enableQuotaMonitor !== quota ? ['quota'] : [])
+    ]);
+    await app.cdp.onMetrics(id, { quotaOnly: false });
+    await app.cdp.onMetrics(null, { quotaOnly: true });
+    assert.deepEqual(samples.splice(0), [...(context ? ['context'] : []), ...(quota ? ['quota'] : [])]);
+  }
+});
+
 test('CDP statistics reject remote origins, wrong conversations, iframe contexts and stale reinjections', async () => {
   const outputs = [];
   let href = `http://127.0.0.1:4000/c/${id}`, reads = 0, resolve;
@@ -162,12 +187,12 @@ test('CDP statistics reject remote origins, wrong conversations, iframe contexts
   const event = { conversationId: id, requestId: '1' };
   await hub.metrics(connection, 7, event); assert.equal(reads, 1); assert.equal(outputs.length, 1);
   for (const location of ['https://external.example/c/' + id, 'http://127.0.0.1:4001/c/' + id, 'http://127.0.0.1:4000/c/' + otherId]) {
-    href = location; connection.metricsAt = 0; await hub.metrics(connection, 7, event);
+    href = location; connection.metricsChannels.context.at = 0; await hub.metrics(connection, 7, event);
   }
-  href = connection.pageUrl; connection.metricsAt = 0; await hub.metrics(connection, 8, event);
+  href = connection.pageUrl; connection.metricsChannels.context.at = 0; await hub.metrics(connection, 8, event);
   assert.equal(reads, 1);
   hub.onMetrics = () => new Promise(done => { resolve = done; });
-  connection.metricsAt = 0;
+  connection.metricsChannels.context.at = 0;
   const pending = hub.metrics(connection, 7, event);
   await new Promise(done => setImmediate(done));
   connection.injectGeneration++; resolve({ conversationId: id }); await pending;

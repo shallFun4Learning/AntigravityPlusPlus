@@ -81,10 +81,11 @@ test('Settings validate values and lock port only while running', () => {
   assert.throws(() => normalizeSettings({ port: '7890xyz' }));
   assert.throws(() => normalizeSettings({ enableI18n: 'false' }));
   assert.throws(() => normalizeSettings({ enableContextMonitor: 'true' }));
+  assert.throws(() => normalizeSettings({ enableQuotaMonitor: 'true' }));
   assert.throws(() => normalizeSettings({ enableProxy: 'true' }));
   assert.throws(() => normalizeSettings({ accountRiskAcknowledged: 'true' }));
   const normalized = normalizeSettings({ port: 7897, enableI18n: false, enableContextMonitor: true });
-  assert.deepEqual(normalized, { port: 7897, enableI18n: false, enableContextMonitor: true, enableProxy: true, accountRiskAcknowledged: false, targetApp: 'auto', customHubPath: '', customIdePath: '' });
+  assert.deepEqual(normalized, { port: 7897, enableI18n: false, enableContextMonitor: true, enableQuotaMonitor: true, enableProxy: true, accountRiskAcknowledged: false, targetApp: 'auto', customHubPath: '', customIdePath: '' });
   assert.throws(() => normalizeSettings({ customHubPath: 123 }));
   assert.throws(() => normalizeSettings({ customIdePath: true }));
   assert.throws(() => assertLaunchSettingsMutable({ customHubPath: 'D:\\custom' }, normalized, 'running'));
@@ -121,6 +122,35 @@ test('account risk acknowledgment persists across settings reloads and unrelated
   assert.equal(reopened.get().accountRiskAcknowledged, true);
   reopened.update({ enableI18n: false });
   assert.equal(createSettings(file).get().accountRiskAcknowledged, true);
+});
+
+test('an old monitor preference seeds both rings once and later changes persist independently', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ring-preferences-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'settings.json');
+  for (const legacy of [false, true]) {
+    writeJson(file, { enableContextMonitor: legacy });
+    const settings = createSettings(file);
+    assert.equal(settings.get().enableQuotaMonitor, legacy);
+    settings.update({ enableContextMonitor: !legacy });
+    const reopened = createSettings(file);
+    assert.equal(reopened.get().enableContextMonitor, !legacy);
+    assert.equal(reopened.get().enableQuotaMonitor, legacy);
+    reopened.update({ enableQuotaMonitor: !legacy });
+    assert.equal(createSettings(file).get().enableContextMonitor, !legacy);
+  }
+});
+
+test('launch and restart reject an action addressed to the other client', async () => {
+  const { session, calls } = sessionFixture();
+  await session.launch('hub');
+  const before = calls.length;
+  assert.equal((await session.launch('ide')).code, 'TARGET_CHANGED');
+  assert.equal((await session.cleanAndLaunch('ide')).code, 'TARGET_CHANGED');
+  assert.equal((await session.stopOnly('ide')).code, 'TARGET_CHANGED');
+  assert.equal(calls.length, before);
+  assert.equal(session.phase, 'running');
+  await session.finish('test');
 });
 
 test('Session supports selecting Antigravity IDE and handles target-specific launch', async () => {

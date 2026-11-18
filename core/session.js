@@ -11,12 +11,12 @@ class Session {
     this.activeTarget = null;
   }
 
-  resolveTarget() {
+  resolveTarget(requested) {
     const settings = this.settings.get();
     if (this.desktop?.resolveTarget) {
-      return this.desktop.resolveTarget(settings.targetApp, settings);
+      return this.desktop.resolveTarget(requested || settings.targetApp, settings);
     }
-    const target = this.desktop?.locate ? this.desktop.locate('hub', settings) : { exists: true, appExe: 'Antigravity' };
+    const target = this.desktop?.locate ? this.desktop.locate(requested || 'hub', settings) : { exists: true, appExe: 'Antigravity' };
     return { id: target.id || 'hub', name: target.appName || target.name || 'Antigravity', ...target };
   }
 
@@ -36,14 +36,18 @@ class Session {
     this.events.publish(this.snapshot());
   }
 
-  async launch() {
+  async launch(requested) {
     if (this.closed) return { ok: false, error: 'Antigravity++ 正在退出' };
+    if (requested !== undefined && !['hub', 'ide'].includes(requested)) return { ok: false, error: '未知的客户端' };
+    if (requested && this.activeTarget && this.activeTarget.id !== requested) {
+      return { ok: false, error: '另一个客户端正在使用中', code: 'TARGET_CHANGED' };
+    }
     if (this.phase === 'running') return { ok: true, alreadyRunning: true };
     if (['preparing', 'launching', 'cleaning'].includes(this.phase)) return { ok: false, error: '正在启动，请稍候' };
     const generation = ++this.generation;
     this.change('preparing');
     try {
-      const target = this.resolveTarget();
+      const target = this.resolveTarget(requested);
       if (!target.exists) throw Object.assign(new Error(`未找到 ${target.name}: ` + target.appExe), { code: 'TARGET_NOT_FOUND' });
       const isRunning = await this.desktop.running(target);
       if (isRunning) throw Object.assign(new Error(`检测到已有 ${target.name} 进程，请先退出；如窗口已经关闭，可清理后重新启动。`), { code: 'PROCESS_CONFLICT' });
@@ -90,9 +94,12 @@ class Session {
     }
   }
 
-  async cleanAndLaunch() {
+  async cleanAndLaunch(expectedTarget) {
     if (this.closed || ['preparing', 'launching', 'cleaning'].includes(this.phase)) return { ok: false, error: '当前正在处理启动，请稍候', code: 'BUSY' };
     const target = this.activeTarget || this.resolveTarget();
+    if (expectedTarget !== undefined && target.id !== expectedTarget) {
+      return { ok: false, error: '客户端已改变，请重新选择要重启的版本', code: 'TARGET_CHANGED' };
+    }
     if (!target.exists) return { ok: false, error: '可执行文件不存在，请重新指定路径', code: 'TARGET_NOT_FOUND' };
     const generation = ++this.generation;
     this.change('cleaning');
@@ -112,7 +119,7 @@ class Session {
       this.activeTarget = null;
       this.events.log('SYSTEM', `${target.name} 进程已清理，正在重新启动`, 'tag-proxy');
       this.change('idle');
-      return this.launch();
+      return this.launch(target.id);
     } catch (error) {
       this.activeTarget = null;
       if (!this.closed) this.change('error');
@@ -121,7 +128,7 @@ class Session {
     }
   }
 
-  async stopOnly() {
+  async stopOnly(expectedTarget) {
     if (this.closed) return { ok: false, error: 'Antigravity++ 正在退出', code: 'CLOSED' };
     if (['preparing', 'launching', 'cleaning'].includes(this.phase)) {
       return { ok: false, error: '当前正在处理启动，请稍候', code: 'BUSY' };
@@ -129,6 +136,9 @@ class Session {
     if (this.phase === 'idle') return { ok: true, alreadyStopped: true };
 
     const target = this.activeTarget || this.resolveTarget();
+    if (expectedTarget !== undefined && target.id !== expectedTarget) {
+      return { ok: false, error: '另一个客户端正在使用中', code: 'TARGET_CHANGED' };
+    }
     const generation = ++this.generation;
     this.change('cleaning');
     this.child = null;

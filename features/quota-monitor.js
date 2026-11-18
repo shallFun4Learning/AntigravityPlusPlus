@@ -145,6 +145,7 @@ class QuotaMonitor {
     this.cacheMs = cacheMs;
     this.unavailableCacheMs = unavailableCacheMs;
     this.generation = 0;
+    this.controller = new AbortController();
     this.pending = null;
     this.snapshot = null;
     this.sampledAt = 0;
@@ -170,13 +171,15 @@ class QuotaMonitor {
   }
 
   async collect(generation) {
-    const callWithTimeout = method => this.client.call(method, {}, AbortSignal.timeout(8000));
+    const signal = this.controller.signal;
+    const callWithTimeout = method => this.client.call(method, {}, AbortSignal.any([signal, AbortSignal.timeout(8000)]));
     try {
       const summary = await callWithTimeout('RetrieveUserQuotaSummary');
       const parsed = parseQuotaSummary(summary);
       if (parsed && generation === this.generation) return parsed;
     } catch { /* Older AG/IDE builds may not expose the summary endpoint. */ }
     try {
+      signal.throwIfAborted();
       const status = await callWithTimeout('GetUserStatus');
       const parsed = parseLegacyStatus(status);
       if (parsed && generation === this.generation) return parsed;
@@ -186,6 +189,8 @@ class QuotaMonitor {
 
   reset() {
     this.generation++;
+    this.controller.abort();
+    this.controller = new AbortController();
     this.pending = null;
     this.snapshot = null;
     this.sampledAt = 0;

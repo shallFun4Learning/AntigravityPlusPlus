@@ -20,129 +20,133 @@
 </head>
 <body>
 
-  <!-- 顶部状态栏 -->
-  <div class="nav-header">
-    <div class="brand">
-      <span class="brand-title">Antigravity++</span>
-      <div class="brand-meta">
-        <span class="version-badge" id="versionBadge">v0.1.0</span>
-        <button type="button" class="update-btn" id="updateBtn" data-action="check-update" title="检查并拉取最新内核与汉化词典，免重装直接生效">
-          <span id="updateActionText">↻ 检查更新</span>
-        </button>
-      </div>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="ic-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10H3z M9 20v-7h6v7"/></symbol>
+    <symbol id="ic-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.3"/><path d="M2 20v-2a7 7 0 0 1 14 0v2 M16 5a3.3 3.3 0 0 1 0 6.5 M18 14a5.5 5.5 0 0 1 4 5"/></symbol>
+    <symbol id="ic-network" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="5" rx="1"/><path d="M12 8v5 M5 16v-3h14v3"/><rect x="2" y="16" width="6" height="5" rx="1"/><rect x="16" y="16" width="6" height="5" rx="1"/></symbol>
+    <symbol id="ic-layers" viewBox="0 0 24 24"><path d="m2 8 10-5 10 5-10 5z M3 12l9 5 9-5 M3 16l9 5 9-5"/></symbol>
+    <symbol id="ic-log" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m7 9 3 3-3 3 M13 15h4"/></symbol>
+    <symbol id="ic-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="ic-update" viewBox="0 0 24 24"><path d="M20 7v5h-5 M4 17v-5h5 M5 9a7.5 7.5 0 0 1 13-3l2 3 M4 15l2 3a7.5 7.5 0 0 0 13-3"/></symbol>
+    <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 5 5"/></symbol>
+  </svg>
+  <aside class="sidebar">
+    <div class="brand"><img src="/assets/logo-64.png" width="32" height="32" alt=""><strong>Antigravity++</strong></div>
+    <nav aria-label="主导航">
+      <button data-view="home" title="工作台" aria-current="page"><svg class="icon"><use href="#ic-home"/></svg><span>工作台</span></button>
+      <button data-view="accounts" title="账号管理"><svg class="icon"><use href="#ic-users"/></svg><span>账号管理</span></button>
+      <button data-view="network" title="网络设置"><svg class="icon"><use href="#ic-network"/></svg><span>网络设置</span></button>
+      <button data-view="enhance" title="界面增强"><svg class="icon"><use href="#ic-layers"/></svg><span>界面增强</span></button>
+      <button data-view="logs" title="运行日志"><svg class="icon"><use href="#ic-log"/></svg><span>运行日志</span></button>
+    </nav>
+    <div class="side-foot">
+      <button id="themeToggleBtn" data-action="toggle-theme" aria-label="切换外观"><svg class="icon"><use href="#ic-theme"/></svg><span id="themeToggleText">切换外观</span></button>
+      <button id="updateBtn" data-action="check-update" title="检查更新"><svg class="icon"><use href="#ic-update"/></svg><span id="updateActionText">检查更新</span></button>
+      <small id="versionBadge">v0.1.1</small>
     </div>
-    <div class="nav-actions">
-      <button type="button" class="tray-btn icon-only" id="themeToggleBtn" data-action="toggle-theme" title="切换浅色 / 深色外观（顶栏与面板同步变色）">
-        <span id="themeToggleText">☀️</span>
-      </button>
-      <div class="status-capsule" id="clientStatusBadge">
-        <div class="dot"></div>
-        <span>未运行</span>
+  </aside>
+  <main>
+    <header class="topbar">
+      <h1 id="pageTitle" tabindex="-1">工作台</h1>
+      <div class="header-actions">
+        <div id="targetSwitcher" class="target-switcher" role="group" aria-label="查看客户端设置">
+          <button data-target="hub" id="targetHubBtn" aria-pressed="true"><i class="target-mark" aria-hidden="true"></i>桌面版<small hidden>未检测到</small></button>
+          <button data-target="ide" id="targetIdeBtn" aria-pressed="false"><i class="target-mark" aria-hidden="true"></i>IDE 版<small hidden>未检测到</small></button>
+        </div>
+        <button class="primary launch-btn" id="launchBtn" data-action="launch" disabled><span id="launchIcon" aria-hidden="true">▷</span><span id="launchText">连接启动器…</span></button>
       </div>
-    </div>
-  </div>
-
-  <div class="settings-grid">
-    <!-- 卡片 1: 原生代理 -->
-    <div class="card">
-      <div class="card-label">网络与免 TUN 链路</div>
-      <div class="row">
-        <span class="row-label">免 TUN 进程代理 <span id="patchStatusBadge" class="row-note row-note-success">· 本地代理就绪</span></span>
-        <label class="switch" title="开启后为 AG 进程注入本地代理；直连环境（如海外/台湾/全局VPN用户）可关闭">
-          <input type="checkbox" id="proxyToggle" checked>
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="row" id="proxyPortRow">
-        <div class="port-heading">
-          <div class="port-heading-copy">
-            <span class="row-label">本地代理端口</span>
-            <span class="port-helper">选择你正在使用的代理工具端口</span>
+    </header>
+    <div class="target-notice" id="targetNotice" role="status" hidden><strong id="targetNoticeTitle"></strong><span id="targetNoticeText"></span></div>
+    <div class="notice" id="actionNotice" hidden><span id="noticeText" role="status"></span><button data-view="logs">查看日志</button><button id="dismissNotice" aria-label="关闭提示">×</button></div>
+    <div class="workspace" id="workspace">
+      <section data-page="home" aria-label="工作台">
+        <div class="card session-card">
+          <div class="session-copy">
+            <div class="caption">当前会话 <span class="status-capsule" id="clientStatusBadge"><i class="dot"></i><span>连接中</span></span></div>
+            <h2 id="sessionAccount">正在读取账号…</h2>
+            <p class="muted" id="accountCurrentSummary"></p>
           </div>
-          <span class="port-current-state" id="portCurrentState" aria-live="polite">已选择 7890</span>
+          <button class="secondary" data-view="accounts">管理账号 <span aria-hidden="true">›</span></button>
         </div>
-        <div class="port-cluster">
-          <button type="button" class="quick-tag active" data-port="7890" aria-pressed="true" title="选择 7890 作为当前端口：Mihomo / Clash 常用端口">
-            <span class="port-number">7890</span> <span class="tag-hint">Mihomo</span><span class="port-check" aria-hidden="true">✓</span>
-          </button>
-          <button type="button" class="quick-tag" data-port="7897" aria-pressed="false" title="选择 7897 作为当前端口：Clash Verge / Verge Rev 常用端口">
-            <span class="port-number">7897</span> <span class="tag-hint">Verge</span><span class="port-check" aria-hidden="true">✓</span>
-          </button>
-          <button type="button" class="quick-tag" data-port="10808" aria-pressed="false" title="选择 10808 作为当前端口：v2rayN / Xray 常用端口">
-            <span class="port-number">10808</span> <span class="tag-hint">v2ray</span><span class="port-check" aria-hidden="true">✓</span>
-          </button>
+        <div class="settings-grid" id="homeSettings">
+          <section class="card settings-card" id="networkCard" aria-labelledby="networkHeading">
+            <div class="card-head">
+              <span class="tile"><svg class="icon"><use href="#ic-network"/></svg></span>
+              <div><h2 id="networkHeading">本地代理</h2><p id="patchStatusBadge" class="muted">进程代理</p></div>
+              <label class="switch"><input type="checkbox" id="proxyToggle" aria-label="免 TUN 进程代理"><span class="slider"></span></label>
+            </div>
+            <div id="proxyPortRow" class="settings-body">
+              <label for="proxyPortInput" class="field-heading">当前端口 <span id="portCurrentState"></span></label>
+              <div class="port-input-row"><span>127.0.0.1</span><span aria-hidden="true">:</span><input id="proxyPortInput" inputmode="numeric" maxlength="5" aria-label="当前代理端口" aria-describedby="portSelectionHint portInputError" autocomplete="off"></div>
+              <div class="port-cluster" aria-label="常用端口">
+                <button data-port="7890" data-name="Mihomo" title="Mihomo / Clash">7890<span class="port-check" aria-hidden="true">✓</span></button>
+                <button data-port="7897" data-name="Verge" title="Clash Verge">7897<span class="port-check" aria-hidden="true">✓</span></button>
+                <button data-port="10808" data-name="v2rayN" title="v2rayN">10808<span class="port-check" aria-hidden="true">✓</span></button>
+                <button id="customPortBtn" title="输入自定义端口">自定义</button>
+              </div>
+              <p id="portSelectionHint" class="hint">可以直接输入自定义端口。</p><p id="portInputError" class="error-text" role="alert"></p>
+            </div>
+          </section>
+          <section class="card settings-card" id="enhanceCard" aria-labelledby="enhanceHeading">
+            <div class="card-head" id="enhancementMonitorRow">
+              <span class="tile"><svg class="icon"><use href="#ic-layers"/></svg></span>
+              <div><h2 id="enhanceHeading">界面深度汉化与监控</h2><p class="muted">· 汉化和 AG 内监控</p></div>
+              <label class="switch"><input type="checkbox" id="enhancementMonitorToggle" aria-label="界面深度汉化与监控"><span class="slider"></span></label>
+            </div>
+            <div class="setting-row"><div><label for="i18nToggle">界面汉化</label><small id="dictCountBadge"></small></div><label class="switch"><input type="checkbox" id="i18nToggle" aria-label="界面汉化"><span class="slider"></span></label></div>
+            <div class="setting-row"><label for="contextMonitorToggle">AG 内上下文</label><label class="switch"><input type="checkbox" id="contextMonitorToggle" aria-label="AG 内上下文"><span class="slider"></span></label></div>
+            <div class="setting-row"><label for="quotaMonitorToggle">AG 内模型用量</label><label class="switch"><input type="checkbox" id="quotaMonitorToggle" aria-label="AG 内模型用量"><span class="slider"></span></label></div>
+            <div class="ring-preview"><small>AG 输入区示例</small><span id="contextPreview"><i class="ring context"></i>上下文</span><span id="quotaPreview"><i class="ring quota"></i>额度</span><small id="emptyPreview" hidden>圆环已关闭</small></div>
+          </section>
         </div>
-        <label class="port-input-row" for="proxyPortInput">
-          <span class="port-input-copy">
-            <span class="port-input-title">当前端口</span>
-            <span class="port-input-hint" id="portSelectionHint">已选择 Mihomo · 也可输入自定义端口</span>
-          </span>
-          <input type="text" id="proxyPortInput" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="7890" placeholder="输入端口" aria-label="当前代理端口">
-        </label>
-        <div class="port-input-error" id="portInputError" role="alert" aria-live="polite"></div>
-      </div>
+        <section class="card activity-card">
+          <div class="card-head"><h2>最近活动</h2><button class="text-button push" data-view="logs">全部日志 <span aria-hidden="true">›</span></button></div>
+          <div id="recentActivity"><p class="empty">暂无运行记录</p></div>
+        </section>
+      </section>
+      <section data-page="accounts" aria-label="账号管理" hidden>
+        <div class="account-split">
+          <section class="card library">
+            <div class="card-head"><h2>本地账号</h2><span id="accountCount" class="count">0</span></div>
+            <div class="library-tools">
+              <label class="search"><svg class="icon"><use href="#ic-search"/></svg><input id="accountSearch" type="search" placeholder="搜索名称或邮箱" aria-label="搜索账号"></label>
+              <div class="library-actions"><button class="secondary" id="accountImportBtn">导入当前登录</button><button class="accent-button" id="accountAddBtn">＋ 添加账号</button></div>
+            </div>
+            <div id="accountList" class="account-list" role="group" aria-label="账号列表"></div>
+          </section>
+          <section class="card detail-card" aria-label="选中账号详情">
+            <div id="detailEmpty" class="detail-empty"><span class="tile"><svg class="icon"><use href="#ic-users"/></svg></span><h2>账号详情</h2><p class="muted">导入当前登录或添加账号后，可在这里查看和切换。</p></div>
+            <div id="accountDetail" hidden>
+              <div class="detail-profile"><span id="detailAvatar" class="avatar large"></span><div><h2 id="detailName"></h2><p id="detailEmail"></p></div></div>
+              <dl class="detail-facts">
+                <div><dt>应用到</dt><dd id="detailTarget"></dd></div>
+                <div><dt>此客户端当前账号</dt><dd id="detailCurrent"></dd></div>
+                <div><dt>登录凭据</dt><dd id="detailCredential"></dd></div>
+              </dl>
+              <button id="switchAccountBtn" class="primary">切换并重启</button>
+              <p class="hint" id="switchHint"></p>
+              <ol id="switchSteps" class="step-list" aria-label="切换流程"><li data-stage="stopping">退出客户端</li><li data-stage="writing">更新登录</li><li data-stage="launching">启动客户端</li></ol>
+              <details id="accountOptions"><summary>更多操作</summary><div class="detail-secondary"><button id="refreshAccountBtn" class="text-button">刷新凭据</button><button id="deleteAccountBtn" class="text-button danger">删除本地账号</button></div></details>
+            </div>
+            <div class="switch-progress" id="switchProgress" role="status" hidden></div>
+          </section>
+        </div>
+      </section>
+      <section data-page="network" aria-label="网络设置" hidden>
+        <div id="networkSlot"></div>
+        <div class="card info-card"><h2>启动目标路径</h2><p id="targetPathText" class="path-value"></p><button class="secondary" id="editTargetPath">设置路径</button></div>
+      </section>
+      <section data-page="enhance" aria-label="界面增强" hidden>
+        <div id="enhanceSlot"></div>
+        <div class="card info-card"><h2>在 Antigravity 中查看圆环</h2><p>上下文和模型用量可分别开启。点击输入区的上下文圆环查看最近一次请求的上下文占用，点击额度圆环查看剩余额度和重置时间。</p></div>
+      </section>
+      <section data-page="logs" aria-label="运行日志" hidden>
+        <div class="card log-card"><div class="card-head"><h2>本次运行</h2><div class="push"><button class="secondary" data-action="copy-logs">复制日志</button> <button class="secondary" data-action="clear-logs">清空</button></div></div>
+          <div class="console" id="consoleBox" tabindex="0" aria-label="日志记录"></div>
+        </div>
+      </section>
     </div>
-
-    <!-- 卡片 2: 本地化汉化与上下文、模型用量圆环 -->
-    <div class="card">
-      <div class="row" id="enhancementMonitorRow">
-        <span class="row-label">界面深度汉化与监控 <span class="row-note">· 汉化和 AG 内监控</span></span>
-        <label class="switch" title="总开关：同时启用或关闭界面深度汉化和 AG 内上下文、模型用量监控">
-          <input type="checkbox" id="enhancementMonitorToggle" aria-label="界面深度汉化与监控" checked>
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="row">
-        <span class="row-label">实时 DOM 字典翻译 <span id="dictCountBadge" class="dict-badge">· 已载入词条</span></span>
-        <label class="switch">
-          <input type="checkbox" id="i18nToggle" checked>
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="row" id="contextMonitorRow">
-        <span class="row-label">AG 内上下文与模型用量 <span class="row-note">· 速度和额度在详情中</span></span>
-        <label class="switch" title="只读采集最近请求的上下文估算和当前模型额度；关闭后移除 AG 内两个标记">
-          <input type="checkbox" id="contextMonitorToggle" aria-label="AG 内上下文与模型用量" checked>
-          <span class="slider"></span>
-        </label>
-      </div>
-    </div>
-  </div>
-
-  <!-- 启动目标选择器：常显，支持桌面版与 IDE 版随时切换与查看 -->
-  <div class="target-switcher" id="targetSwitcher">
-    <span class="switcher-label">启动目标</span>
-    <div class="switcher-pills" role="radiogroup" aria-label="选择启动目标">
-      <button type="button" class="target-pill active" data-target="hub" id="targetHubBtn" title="启动 Antigravity 官方桌面客户端">
-        <span class="pill-dot" id="hubDot"></span>
-        <span class="pill-icon" aria-hidden="true">▣</span>
-        <span>桌面版</span>
-      </button>
-      <button type="button" class="target-pill" data-target="ide" id="targetIdeBtn" title="启动 Antigravity IDE 编辑器版（基于 VS Code）">
-        <span class="pill-dot" id="ideDot"></span>
-        <span class="pill-icon" aria-hidden="true">✎</span>
-        <span>IDE 版</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- 账号管理 -->
-  <div class="card accounts-card">
-    <div class="account-card-head">
-      <div>
-        <div class="card-label">账号管理</div>
-        <div class="account-card-subtitle" id="accountCurrentSummary">尚未选择当前账号</div>
-      </div>
-      <div class="account-card-actions">
-        <button type="button" class="clean-btn account-import-btn" id="accountImportBtn" title="只读取当前 Antigravity 登录状态并保存到本地账号库">导入当前登录</button>
-        <button type="button" class="clean-btn account-add-btn" id="accountAddBtn">手动添加</button>
-      </div>
-    </div>
-    <div class="account-list" id="accountList">
-      <div class="account-empty">还没有保存账号，可以先添加一个 OAuth 凭据。</div>
-    </div>
-    <div class="account-hint">导入只读取当前登录状态；切换账号会退出当前 Antigravity，写入新账号凭据并重新启动。</div>
-  </div>
+  </main>
 
   <div class="modal-backdrop" id="accountRiskModal" style="display:none;">
     <div class="modal-card account-risk-card" role="dialog" aria-modal="true" aria-labelledby="accountRiskTitle" aria-describedby="accountRiskDescription">
@@ -170,9 +174,10 @@
     </div>
   </div>
 
-  <div class="account-form" id="accountForm" style="display: none;">
+  <div class="modal-backdrop" id="formBackdrop" style="display:none;">
+  <div class="modal-card account-form" id="accountForm" role="dialog" aria-modal="true" aria-labelledby="accountFormTitle" style="display:none;">
     <div class="account-form-head">
-      <span>登录并添加账号</span>
+      <span id="accountFormTitle">网页登录添加账号</span>
       <button type="button" class="modal-close-btn" id="accountFormClose" aria-label="关闭">×</button>
     </div>
     <p class="account-oauth-desc">点击“打开链接”在浏览器中完成登录。登录成功后，本地回调会自动识别邮箱并保存账号；如果没有自动完成，可以使用下方的手工回填。</p>
@@ -184,15 +189,16 @@
       <button type="button" class="btn-modal-cancel" id="accountCopyLink">复制链接</button>
     </div>
     <div class="account-oauth-status" id="accountOauthStatus" role="status" aria-live="polite">正在准备登录链接…</div>
-    <div class="account-callback-fill">
-      <label>登录成功后的链接（手工回填）
+    <details class="account-callback-fill">
+      <summary>手工回填登录结果</summary>
+      <label>登录成功后的链接
         <input type="text" id="accountCallbackUrlInput" autocomplete="off" spellcheck="false" placeholder="粘贴浏览器地址栏中的完整链接">
       </label>
       <div class="account-callback-hint">提示：复制登录成功后的链接。</div>
       <div class="account-callback-actions">
         <button type="button" class="btn-path-action btn-save" id="accountCallbackFill" disabled>回填登录结果</button>
       </div>
-    </div>
+    </details>
     <details class="account-manual-details">
       <summary>高级选项：手动填写凭据</summary>
       <p class="account-manual-desc">仅在网页登录无法完成时使用。凭据会写入本地加密账号库。</p>
@@ -209,6 +215,7 @@
       <button type="button" class="btn-modal-cancel" id="accountFormCancel">取消</button>
     </div>
     <div class="account-form-error" id="accountFormError" role="alert"></div>
+  </div>
   </div>
 
   <div class="modal-backdrop" id="accountConfirmModal" style="display:none;">
@@ -231,30 +238,6 @@
 
 
 
-  <!-- 核心启动按钮 -->
-  <button class="launch-btn" id="launchBtn" data-action="launch">
-    <span class="launch-icon" id="launchIcon" aria-hidden="true">▶</span>
-    <span id="launchText">启动 Antigravity</span>
-  </button>
-
-  <!-- 运行日志：常显卡片，不折叠 -->
-  <div class="advanced" id="advancedPanel">
-    <div class="advanced-head">
-      <span>运行日志</span>
-      <div class="advanced-actions">
-        <button type="button" class="clean-btn" data-action="copy-logs">复制日志</button>
-        <button type="button" class="clean-btn" data-action="clear-logs">清空</button>
-      </div>
-    </div>
-    <div class="advanced-body">
-      <div class="console-pane">
-        <div class="console" id="consoleBox">
-          <div class="log-line boot-log">[SYSTEM] Antigravity++ 已就绪。</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- 路径选择兜底模态弹窗（仅在未找到程序或启动报错时弹出，平时完全不占空间） -->
   <div class="modal-backdrop" id="pathModal" style="display: none;">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTargetTitle">
@@ -268,8 +251,8 @@
       <div class="modal-body">
         <p class="modal-desc" id="pathTipText">未在默认路径检测到程序。如安装在非 C 盘，请点击“浏览”指定 .exe 文件路径：</p>
         <div class="modal-input-row">
-          <input type="text" id="customPathInput" placeholder="输入或浏览选择 .exe 完整路径" spellcheck="false">
-          <button type="button" class="btn-path-action btn-browse" id="browseExeBtn" title="打开 Windows 文件选择器选择可执行文件">📂 浏览</button>
+          <input type="text" id="customPathInput" placeholder="输入或浏览选择客户端路径" aria-label="客户端路径" spellcheck="false">
+          <button type="button" class="btn-path-action btn-browse" id="browseExeBtn">浏览</button>
         </div>
         <div class="modal-error-tip" id="pathEditTip" style="display: none;">
           <span id="pathTipIcon">❌</span>
@@ -293,7 +276,7 @@
         <button type="button" class="modal-close-btn" data-action="dismiss-process" aria-label="关闭">×</button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc" id="processModalDesc">如果你已关闭 AG，可能仍有后台进程未退出。清理会结束当前用户在此安装目录下的 AG 主程序及相关后台进程，请先保存工作并确认没有需要保留的任务。</p>
+        <p class="modal-desc" id="processModalDesc">重新启动会退出此客户端及其后台进程。请先保存正在进行的工作。</p>
         <p class="modal-desc" id="processError" role="alert"></p>
       </div>
       <div class="modal-foot"><div class="modal-foot-right">

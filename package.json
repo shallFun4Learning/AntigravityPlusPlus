@@ -1,6 +1,6 @@
 {
   "name": "antigravityplusplus",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "edition": "plusplus",
   "description": "Antigravity++ launcher: process proxy, reversible localization and context and quota rings",
   "main": "server.js",

@@ -1,12 +1,18 @@
 // Local composer geometry checks adapted from Antigrative Dashboard (MIT).
 // Copyright (c) 2026 AG Pulse contributors. See THIRD-PARTY-NOTICES.md.
-function installContextWidget(win, doc, enabled, report, readConversationId) {
+function installContextWidget(win, doc, options, report, readConversationId, binding) {
+  if ((options.context || options.quota) && binding && win.__easyagContext?.binding === binding) {
+    win.__easyagContext.configure(options);
+    return;
+  }
   win.__easyagContext?.dispose();
-  if (!enabled) return;
+  if (!options.context && !options.quota) return;
   const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  let node, shadow, button, card, quotaButton, quotaCard, composer, data;
-  let route = '', pending, lastFetch = 0, sequence = 0, disposed = false;
-  let observer, resizeObserver, frame, sendTimer, sendRefreshQueued = false;
+  let node, shadow, button, card, quotaButton, quotaCard, composer;
+  let route = null, sequence = 0, disposed = false;
+  let observer, resizeObserver, frame, sendTimer;
+  const contextFeed = { enabled: options.context, pending: null, data: null, lastFetch: 0, queued: false };
+  const quotaFeed = { enabled: options.quota, pending: null, data: null, lastFetch: 0, queued: false };
   const REFRESH_INTERVAL_MS = 60000;
   const now = () => typeof win.__easyagNow === 'function' ? win.__easyagNow() : Date.now();
   const conversationId = () => {
@@ -116,10 +122,10 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
       || name === 'thirdpartymodels';
   };
   function quotaSelection() {
-    const groups = Array.isArray(data?.quota?.groups) ? data.quota.groups : [];
+    const groups = quotaFeed.data?.quota?.groups || [];
     const domModel = typeof composer?.anchor?.textContent === 'string'
       ? composer.anchor.textContent.replace(/\s+/g, ' ').trim().slice(0, 100) : '';
-    const model = domModel || data?.context?.model || data?.speed?.model || '';
+    const model = domModel || contextFeed.data?.context?.model || contextFeed.data?.speed?.model || '';
     const key = normalizeModel(model);
     const exact = key ? groups.filter(group => [group.displayName, ...(group.modelKeys || [])].some(value => {
       const candidate = normalizeModel(value);
@@ -169,7 +175,7 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
       if (Array.isArray(body.children)) body.children.length = 0;
     }
     if (!selection.groups.length) {
-      body.appendChild(make('p', { class: 'quota-empty' }, data?.quota?.state === 'live' ? '当前模型暂无可用额度窗口。' : '当前用量不可用，将自动重试。'));
+      body.appendChild(make('p', { class: 'quota-empty' }, quotaFeed.data?.quota?.state === 'live' ? '当前模型暂无可用额度窗口。' : '当前用量不可用，将自动重试。'));
       return;
     }
     const selectedIds = new Set(selection.selected.map(group => group.id));
@@ -190,8 +196,9 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
       }
     }
   }
-  function render() {
-    if (!shadow) return;
+  function renderContext() {
+    if (!button) return;
+    const data = contextFeed.data;
     const context = data?.context, speed = data?.speed;
     const percentage = typeof context?.usedFraction === 'number' ? Math.round(context.usedFraction * 100) : null;
     shadow.getElementById('context-value').textContent = percentage !== null ? String(Math.min(999, percentage)) + (percentage > 999 ? '+' : '') : '—';
@@ -220,11 +227,13 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
       : `${speed.basis === 'response' ? '按可见输出计算' : '输出字段不全，按总输出计算'}${speed.shortSample ? '；短样本波动较大' : ''}。${noteModel ? '采样模型：' + noteModel : ''}`;
     shadow.getElementById('updated').textContent = data?.state === 'live'
       ? `采集于 ${new Date(data.sampledAt).toLocaleTimeString()}；上下文为最近请求开始时的宿主估算。`
-      : data?.quota?.state === 'live' && data.sampledAt
-        ? `模型用量采集于 ${new Date(data.sampledAt).toLocaleTimeString()}；每分钟或发送消息后刷新。`
-      : pending ? '正在读取本地统计…'
-        : !route ? '打开或新建对话后读取上下文统计；模型用量会自动更新。'
+      : contextFeed.pending ? '正在读取本地统计…'
+        : !route ? '打开对话并发送消息后，可查看上下文统计。'
           : '当前统计不可用，将自动重试；不影响其他增强功能。';
+    positionCard(card, button);
+  }
+  function renderQuota() {
+    if (!quotaButton) return;
     const quota = quotaSelection();
     const quotaPercent = quotaPercentage(quota.remainingFraction);
     const quotaValue = shadow.getElementById('quota-value');
@@ -242,7 +251,6 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
     const quotaFillFraction = quotaPercent === 0 ? 0 : quota.remainingFraction;
     if (quotaFill) quotaFill.style.strokeDashoffset = String(62.832 * (1 - (quotaFillFraction ?? 0)));
     renderQuotaDetails(quota);
-    positionCard(card, button);
     positionCard(quotaCard, quotaButton);
   }
   function createNode() {
@@ -259,23 +267,22 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
       [hidden]{display:none!important}.head{display:flex;justify-content:space-between;align-items:center}.head button{font-size:16px}dl{margin:10px 0}dl div{display:flex;gap:12px;justify-content:space-between;margin:8px 0}dt{opacity:.7}dd{margin:0;max-width:65%;text-align:right;overflow-wrap:anywhere}.note{font-size:11px;line-height:1.6;opacity:.7;margin:8px 0 0}
       .quota-group{font-size:13px;margin:12px 0 6px}.quota-group.selected{color:#16a34a}.quota-window{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:9px 0}.quota-window-left{min-width:0}.quota-window-name{font-size:12px}.quota-reset{font-size:11px;line-height:1.45;opacity:.68}.quota-window-value{display:flex;align-items:center;gap:7px;white-space:nowrap;font-variant-numeric:tabular-nums;color:#16a34a}.quota-window-value svg{flex:none}.quota-empty{opacity:.7;line-height:1.5}
     `));
-    shadow.appendChild(make("div", {"id": "strip", "class": "strip"},
-      make("button", {"id": "trigger", "class": "indicator", "type": "button", "aria-expanded": "false", "aria-controls": "details", "aria-label": "上下文估算"},
-        make("svg", {"viewBox": "0 0 24 24", "aria-hidden": "true"},
-          make("circle", {"class": "ring-track", "cx": "12", "cy": "12", "r": "10", "fill": "none", "stroke": "currentColor", "stroke-width": "2"}),
-          make("circle", {"id": "context-fill", "class": "ring-fill", "cx": "12", "cy": "12", "r": "10", "fill": "none", "stroke": "currentColor", "stroke-width": "2", "stroke-dasharray": "62.832", "stroke-dashoffset": "62.832"}),
-          make("text", {"id": "context-value", "class": "ring-number", "x": "12", "y": "12", "text-anchor": "middle", "dominant-baseline": "central"}, "—")
-        )
-      ),
-      make("button", {"id": "quota-trigger", "class": "indicator quota-indicator", "type": "button", "aria-expanded": "false", "aria-controls": "quota-details", "aria-label": "模型用量"},
-        make("svg", {"viewBox": "0 0 24 24", "aria-hidden": "true"},
-          make("circle", {"class": "quota-track", "cx": "12", "cy": "12", "r": "10", "fill": "none", "stroke": "currentColor", "stroke-width": "2"}),
-          make("circle", {"id": "quota-fill", "class": "quota-fill", "cx": "12", "cy": "12", "r": "10", "fill": "none", "stroke": "currentColor", "stroke-width": "2", "stroke-dasharray": "62.832", "stroke-dashoffset": "62.832"}),
-          make("text", {"id": "quota-value", "class": "quota-number", "x": "12", "y": "12", "text-anchor": "middle", "dominant-baseline": "central"}, "—")
-        )
-      )
-    ));
-    shadow.appendChild(make("section", {"id": "details", "class": "card", "role": "region", "aria-label": "Antigravity++ 上下文详情", "hidden": ""},
+    shadow.appendChild(make('div', { id: 'strip', class: 'strip' }));
+    // Keep host focus handlers from swallowing clicks without cancelling keyboard defaults.
+    for (const type of ['pointerdown', 'mousedown', 'click']) node.addEventListener(type, event => event.stopPropagation());
+    syncControls();
+  }
+  function makeIndicator(id, className, prefix, details, label) {
+    return make('button', { id, class: className, type: 'button', 'aria-expanded': 'false', 'aria-controls': details, 'aria-label': label },
+      make('svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+        make('circle', { class: 'ring-track', cx: '12', cy: '12', r: '10', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }),
+        make('circle', { id: prefix + '-fill', class: 'ring-fill', cx: '12', cy: '12', r: '10', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-dasharray': '62.832', 'stroke-dashoffset': '62.832' }),
+        make('text', { id: prefix + '-value', class: 'ring-number', x: '12', y: '12', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, '—')));
+  }
+  function createContextControls(strip) {
+    button = makeIndicator('trigger', 'indicator', 'context', 'details', '上下文估算');
+    strip.insertBefore(button, strip.firstChild);
+    card = shadow.appendChild(make("section", {"id": "details", "class": "card", "role": "region", "aria-label": "Antigravity++ 上下文详情", "hidden": ""},
       make("div", {"class": "head"},
         make("strong", {}, "上下文估算"),
         make("button", {"id": "close", "type": "button", "aria-label": "关闭详情"}, "×")
@@ -306,26 +313,38 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
       make("p", {"class": "note", "id": "updated"}),
       make("p", {"class": "note"}, "占用可能在压缩后下降；百分比不代表模型能记住多少内容。")
     ));
-    shadow.appendChild(make("section", {"id": "quota-details", "class": "card", "role": "region", "aria-label": "Antigravity++ 模型用量", "hidden": ""},
+    bindCard(button, card, 'close', showCard);
+    renderContext();
+  }
+  function createQuotaControls(strip) {
+    quotaButton = makeIndicator('quota-trigger', 'indicator quota-indicator', 'quota', 'quota-details', '模型用量');
+    strip.appendChild(quotaButton);
+    quotaCard = shadow.appendChild(make("section", {"id": "quota-details", "class": "card", "role": "region", "aria-label": "Antigravity++ 模型用量", "hidden": ""},
       make("div", {"class": "head"},
         make("strong", {}, "用量"),
         make("button", {"id": "quota-close", "type": "button", "aria-label": "关闭用量详情"}, "×")
       ),
       make("div", {"id": "quota-body"})
     ));
-    button = shadow.getElementById('trigger');
-    card = shadow.getElementById('details');
-    quotaButton = shadow.getElementById('quota-trigger');
-    quotaCard = shadow.getElementById('quota-details');
-    if (typeof card.showPopover === 'function') card.setAttribute('popover', 'manual');
-    if (typeof quotaCard.showPopover === 'function') quotaCard.setAttribute('popover', 'manual');
-    button.addEventListener('click', () => { if (card.hidden) showCard(); else hideCard(card, button); });
-    quotaButton.addEventListener('click', () => { if (quotaCard.hidden) showQuotaCard(); else hideCard(quotaCard, quotaButton); });
-    shadow.getElementById('close').addEventListener('click', () => { hideCard(card, button); button.focus({ preventScroll: true }); });
-    shadow.getElementById('quota-close').addEventListener('click', () => { hideCard(quotaCard, quotaButton); quotaButton.focus({ preventScroll: true }); });
-    // Keep host focus handlers from swallowing our clicks, without cancelling keyboard defaults.
-    for (const type of ['pointerdown', 'mousedown', 'click']) node.addEventListener(type, event => event.stopPropagation());
-    render();
+    bindCard(quotaButton, quotaCard, 'quota-close', showQuotaCard);
+    renderQuota();
+  }
+  function bindCard(trigger, details, closeId, show) {
+    if (typeof details.showPopover === 'function') details.setAttribute('popover', 'manual');
+    trigger.addEventListener('click', () => { if (details.hidden) show(); else hideCard(details, trigger); });
+    shadow.getElementById(closeId).addEventListener('click', () => { hideCard(details, trigger); trigger.focus({ preventScroll: true }); });
+  }
+  function syncControls() {
+    if (!shadow) return;
+    const strip = shadow.getElementById('strip');
+    if (contextFeed.enabled && !button) createContextControls(strip);
+    if (!contextFeed.enabled && button) {
+      hideCard(card, button); card.remove(); button.remove(); card = button = null;
+    }
+    if (quotaFeed.enabled && !quotaButton) createQuotaControls(strip);
+    if (!quotaFeed.enabled && quotaButton) {
+      hideCard(quotaCard, quotaButton); quotaCard.remove(); quotaButton.remove(); quotaCard = quotaButton = null;
+    }
   }
   function fit() {
     if (!node?.isConnected || !composer) return;
@@ -366,10 +385,11 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
     }
   }
   function syncRoute() {
-    const next = conversationId();
+    const next = contextFeed.enabled ? conversationId() : null;
     if (next === route) return;
-    route = next; pending = null; data = null; lastFetch = 0;
-    hideCards(); render();
+    route = next;
+    resetFeed(contextFeed);
+    hideCard(card, button); renderContext();
   }
   function mount() {
     syncRoute();
@@ -414,51 +434,57 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
   const belongsToComposer = control => Boolean(control && composer
     && (composer.row?.contains?.(control) || composer.row?.parentElement?.contains?.(control)));
   function scheduleSendRefresh() {
-    if (disposed || !enabled || typeof win.setTimeout !== 'function') return;
-    sendRefreshQueued = true;
+    if (disposed || typeof win.setTimeout !== 'function') return;
     if (sendTimer !== undefined) win.clearTimeout(sendTimer);
     sendTimer = win.setTimeout(() => {
       sendTimer = undefined;
-      lastFetch = 0;
-      if (pending) return;
-      sendRefreshQueued = false;
-      refresh('send');
+      refresh(true);
     }, 800);
   }
-  function refresh(reason = 'timer') {
-    if (!enabled || disposed || doc.hidden || !node?.isConnected || node.hidden) return;
+  function resetFeed(feed) {
+    feed.pending = null; feed.data = null; feed.lastFetch = 0; feed.queued = false;
+  }
+  function refresh(force = false) {
+    if (disposed || doc.hidden || !node?.isConnected || node.hidden) return;
     const timestamp = now();
-    const due = lastFetch === 0 || timestamp - lastFetch >= REFRESH_INTERVAL_MS;
-    const urgent = reason === 'send' || due;
-    if (pending && timestamp - pending.at < 25000) return;
-    if (pending) pending = null;
-    if (!urgent) { render(); return; }
-    if (data?.sampledAt && timestamp - data.sampledAt > REFRESH_INTERVAL_MS) data = null;
-    const requestId = String(++sequence);
-    const conversation = route || null;
-    pending = { requestId, conversationId: conversation, at: timestamp }; lastFetch = timestamp;
-    const event = {
-      type: conversation ? 'context-metrics' : 'quota-metrics',
-      requestId,
-      forceQuota: reason === 'send' || due
-    };
-    if (conversation) event.conversationId = conversation;
-    try { report(event); }
-    catch { pending = null; data = null; }
-    render();
+    for (const feed of [contextFeed, quotaFeed]) {
+      const isContext = feed === contextFeed;
+      if (!feed.enabled || (isContext && !route)) continue;
+      if (force) feed.queued = true;
+      if (feed.pending && timestamp - feed.pending.at < 25000) continue;
+      if (feed.pending) { feed.pending = null; feed.lastFetch = 0; }
+      if (feed.lastFetch && timestamp - feed.lastFetch < (feed.queued ? 1200 : REFRESH_INTERVAL_MS)) continue;
+      const forceQuota = feed.queued || feed.lastFetch > 0;
+      if (feed.data?.sampledAt && timestamp - feed.data.sampledAt > REFRESH_INTERVAL_MS) feed.data = null;
+      const requestId = String(++sequence);
+      feed.pending = { requestId, at: timestamp };
+      feed.lastFetch = timestamp;
+      const event = isContext ? { type: 'context-metrics', conversationId: route, requestId }
+        : { type: 'quota-metrics', forceQuota, requestId };
+      feed.queued = false;
+      try { report(event); } catch { feed.pending = null; feed.data = null; }
+    }
+    renderContext(); renderQuota();
   }
   function receive(requestId, result) {
-    const currentConversation = conversationId();
-    if (disposed || !pending || pending.requestId !== requestId
-      || pending.conversationId !== currentConversation
-      || (result?.conversationId ?? null) !== pending.conversationId) return;
-    const refreshAfterSend = sendRefreshQueued;
-    pending = null; data = result; render(); fit();
-    if (refreshAfterSend) {
-      sendRefreshQueued = false;
-      lastFetch = 0;
-      refresh('send');
+    if (disposed) return;
+    const feed = [contextFeed, quotaFeed].find(item => item.pending?.requestId === requestId);
+    if (!feed) return;
+    if (feed === contextFeed && (route !== conversationId() || result?.conversationId !== route)) return;
+    feed.pending = null;
+    feed.data = result;
+    if (feed === contextFeed) renderContext(); else renderQuota();
+    fit();
+    if (feed.queued) refresh();
+  }
+  function configure(next) {
+    for (const [feed, enabled] of [[contextFeed, next.context], [quotaFeed, next.quota]]) {
+      if (feed.enabled !== enabled) resetFeed(feed);
+      // The bridge drops responses from the previous injection generation.
+      else if (feed.pending) { feed.pending = null; feed.lastFetch = 0; }
+      feed.enabled = enabled;
     }
+    syncControls(); mount(); refresh();
   }
   function schedule() {
     if (disposed || frame !== undefined) return;
@@ -482,7 +508,7 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
     if (event.key === 'Escape') {
       const focused = shadow?.activeElement;
       hideCards();
-      if (focused) (focused === quotaButton ? quotaButton : button)?.focus({ preventScroll: true });
+      if (focused) (quotaButton && (focused === quotaButton || quotaCard?.contains(focused)) ? quotaButton : button)?.focus({ preventScroll: true });
     }
   };
   doc.addEventListener('pointerdown', onPointer);
@@ -496,8 +522,8 @@ function installContextWidget(win, doc, enabled, report, readConversationId) {
   });
   observer.observe(doc.documentElement, { childList: true, subtree: true });
   const timer = win.setInterval(() => { mount(); refresh(); }, 1000);
-  win.__easyagContext = { receive, dispose() {
-    disposed = true; pending = null; data = null; sendRefreshQueued = false; hideCards(); node?.remove();
+  win.__easyagContext = { binding, configure, receive, dispose() {
+    disposed = true; resetFeed(contextFeed); resetFeed(quotaFeed); hideCards(); node?.remove();
     if (sendTimer !== undefined) win.clearTimeout(sendTimer);
     win.clearInterval(timer); if (frame !== undefined) win.cancelAnimationFrame(frame);
     observer.disconnect(); resizeObserver?.disconnect();

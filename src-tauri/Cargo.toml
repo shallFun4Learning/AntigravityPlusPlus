@@ -1,6 +1,6 @@
 [package]
 name = "antigravityplusplus"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Antigravity++ - TUN-free process proxy, reversible DOM localization and context and quota rings"
 

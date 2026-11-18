@@ -56,25 +56,22 @@ function createApplication({ rootDir, dataDir, native = false, testMode = false,
   const cdp = new CdpHub({
     profile: desktop.profile,
     source: (binding, target) => rendererSource(dictionary, settings.get(), binding, target),
-    onMetrics: (id, options = {}) => {
-      if (!settings.get().enableContextMonitor || session?.phase !== 'running' || testMode) {
-        return Promise.resolve({
-          conversationId: id,
-          state: 'unavailable',
-          context: null,
-          speed: null,
-          quota: { state: 'unavailable', source: null, groups: [] }
-        });
+    onMetrics: async (id, { quotaOnly, forceQuota } = {}) => {
+      const current = settings.get();
+      const running = session?.phase === 'running' && !testMode;
+      if (quotaOnly) {
+        const quota = running && current.enableQuotaMonitor
+          ? await quotaMonitor.sample(forceQuota)
+          : { state: 'unavailable', source: null, groups: [] };
+        return { conversationId: null, sampledAt: Date.now(), quota };
       }
-      const context = id
-        ? contextMonitor.sample(id)
-        : Promise.resolve({ conversationId: null, state: 'unavailable', context: null, speed: null });
-      return Promise.all([context, quotaMonitor.sample(options.forceQuota === true)])
-        .then(([contextResult, quota]) => ({ ...contextResult, sampledAt: contextResult.sampledAt || Date.now(), quota }));
+      if (running && current.enableContextMonitor && id) return contextMonitor.sample(id);
+      return { conversationId: id, state: 'unavailable', context: null, speed: null };
     },
     onStop: () => {
       contextMonitor.reset();
       quotaMonitor.reset();
+      languageService.reset();
     },
     onStatus: status => {
       const key = JSON.stringify([status.cdpSockets, status.cdpTargets, status.cdpError]);
@@ -84,9 +81,10 @@ function createApplication({ rootDir, dataDir, native = false, testMode = false,
     }
   });
   session = new Session({ settings, desktop, cdp, events, host, testMode, onStart: ({ target, pid }) => {
-    contextMonitor.client.profile = target.profile;
-    contextMonitor.client.target = target.id;
-    contextMonitor.client.parentPid = pid;
+    languageService.reset();
+    languageService.profile = target.profile;
+    languageService.target = target.id;
+    languageService.parentPid = pid;
     contextMonitor.reset();
     quotaMonitor.reset();
   } });
@@ -124,6 +122,7 @@ function createApplication({ rootDir, dataDir, native = false, testMode = false,
         targetName: active.name,
         bothInstalled,
         accounts,
+        accountSwitch: accountManager?.switchStatus || null,
         oauth: oauthLogin?.status() || { ok: true, state: 'idle', active: false }
       };
     },
@@ -138,13 +137,14 @@ function createApplication({ rootDir, dataDir, native = false, testMode = false,
       const previous = settings.get();
       assertLaunchSettingsMutable(input, previous, session.phase);
       const next = settings.update(input);
-      if (next.enableContextMonitor !== previous.enableContextMonitor) {
-        contextMonitor.reset();
-        quotaMonitor.reset();
-      }
-      await cdp.refresh();
+      const contextChanged = next.enableContextMonitor !== previous.enableContextMonitor;
+      const quotaChanged = next.enableQuotaMonitor !== previous.enableQuotaMonitor;
+      if (contextChanged) contextMonitor.reset();
+      if (quotaChanged) quotaMonitor.reset();
+      if (contextChanged || quotaChanged || next.enableI18n !== previous.enableI18n) await cdp.refresh();
       if (next.enableI18n !== previous.enableI18n) events.log('I18N', next.enableI18n ? '汉化已开启' : '汉化已关闭，原文已恢复', 'tag-i18n');
-      if (next.enableContextMonitor !== previous.enableContextMonitor) events.log('SYSTEM', next.enableContextMonitor ? '上下文与模型用量监控已开启（只读）' : '上下文监控已关闭，上下文与模型用量圆环已移除', 'tag-proxy');
+      if (contextChanged) events.log('SYSTEM', next.enableContextMonitor ? '上下文圆环已开启' : '上下文圆环已关闭', 'tag-proxy');
+      if (quotaChanged) events.log('SYSTEM', next.enableQuotaMonitor ? '模型用量圆环已开启' : '模型用量圆环已关闭', 'tag-proxy');
       if (input.enableProxy !== undefined && input.enableProxy !== previous.enableProxy) {
         events.log('SYSTEM', next.enableProxy ? `免 TUN 代理已开启（127.0.0.1:${next.port}）` : '免 TUN 代理已关闭（直连模式）', 'tag-proxy');
       }

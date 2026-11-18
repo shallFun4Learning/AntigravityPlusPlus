@@ -30,7 +30,7 @@ async function main() {
   <script>window.calls=[];window.sample=(event)=>({conversationId:event.conversationId??null,state:event.conversationId?'live':'unavailable',sampledAt:Date.now(),context:event.conversationId?{usedTokens:110000,maxTokens:256000,usedFraction:110000/256000,model:'Gemini 4 Argon',endpointModel:'gemini-3.8-flash-k'}:null,speed:event.conversationId?{tokensPerSecond:52,ttftSeconds:0.7,basis:'response',model:'Gemini 4 Argon',endpointModel:'gemini-3.8-flash-k'}:null,quota:{state:'live',source:'summary',groups:[{id:'gemini-argon',displayName:'Gemini 4 Argon',family:'gemini',modelKeys:['Gemini 4 Argon'],buckets:[{id:'weekly',displayName:'Weekly limit',remainingFraction:0.67,resetAt:'2030-01-02T00:00:00Z'}]}]}});
   window.ideOwner={props:{cascadeId:'${id}'}};
   if (${ide}) document.querySelector('.antigravity-agent-side-panel').__k={__k:[{__e:document.getElementById('antigravity.agentSidePanelInputBox'),__:ideOwner}]};
-  (${installContextWidget.toString()})(window,document,true,event=>{calls.push(event);queueMicrotask(()=>window.__easyagContext?.receive(event.requestId,sample(event)));},${ide ? `(win,doc)=>(${currentConversationId.toString()})(win,doc,'ide')` : 'undefined'});</script></body></html>`;
+  window.setRings = options => (${installContextWidget.toString()})(window,document,options,event=>{calls.push(event);queueMicrotask(()=>window.__easyagContext?.receive(event.requestId,sample(event)));},${ide ? `(win,doc)=>(${currentConversationId.toString()})(win,doc,'ide')` : 'undefined'},'fixture-binding');setRings({context:true,quota:true});</script></body></html>`;
   const server = http.createServer((_, response) => { response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html); });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const browser = spawn(executable, ['--headless=new', '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1',
@@ -82,7 +82,7 @@ async function main() {
     assert.equal(await evaluate(nativeHit), true);
     const beforeSend = await evaluate('calls.length');
     await evaluate("document.getElementById('send').click()");
-    await sleep(1000);
+    await sleep(2200);
     assert.ok(await evaluate('calls.length') > beforeSend, 'Sending a message refreshes usage');
     assert.equal(await evaluate('calls.at(-1).forceQuota'), true);
     await evaluate("document.getElementById('easyag-context-monitor').shadowRoot.getElementById('trigger').click()");
@@ -112,7 +112,13 @@ async function main() {
     assert.equal(await evaluate("document.getElementById('easyag-context-monitor').hidden"), false);
     await evaluate(ide ? `window.ideOwner.props.cascadeId='${otherId}'` : `history.pushState({},'', '/c/${otherId}')`); await sleep(1200);
     assert.equal(await evaluate('calls.at(-1).conversationId'), otherId);
-    await evaluate(`(${installContextWidget.toString()})(window,document,false,()=>{})`);
+    await evaluate('setRings({quota:true,context:false})');
+    assert.equal(await evaluate("document.getElementById('easyag-context-monitor').shadowRoot.getElementById('trigger')"), null);
+    assert.equal(await evaluate("document.getElementById('easyag-context-monitor').shadowRoot.getElementById('quota-value').textContent"), '67');
+    await evaluate('setRings({context:true,quota:false})');
+    assert.equal(await evaluate("document.getElementById('easyag-context-monitor').shadowRoot.getElementById('quota-trigger')"), null);
+    assert.equal(await evaluate("document.getElementById('easyag-context-monitor').shadowRoot.getElementById('context-value').textContent"), '43');
+    await evaluate('setRings({context:false,quota:false})');
     assert.equal(await evaluate("Boolean(document.getElementById('easyag-context-monitor'))"), false);
     assert.equal(await evaluate(nativeHit), true);
     console.log(`PASS: ${ide ? 'IDE Trusted Types and same-URL switching' : 'desktop routing'}, context ring, details, close/reopen, Escape/outside click, narrow recovery, native hit targets and cleanup`);

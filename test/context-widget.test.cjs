@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const id = '11111111-1111-1111-1111-111111111111';
 const nextId = '22222222-2222-2222-2222-222222222222';
 
-function fixture() {
+function fixture(options = { context: true, quota: true }) {
   class Element {
     constructor(rect = { left: 110, right: 210, top: 150, bottom: 178, width: 100, height: 28 }) {
       this.rect = rect; this.style = {}; this.dataset = {}; this.attrs = {}; this.events = {}; this.hidden = false;
@@ -18,6 +18,11 @@ function fixture() {
     setAttribute(key, value) { this.attrs[key] = value; if (key === 'hidden') this.hidden = true; }
     getAttribute(key) { return this.attrs[key] ?? null; }
     appendChild(child) { this.children.push(child); child.parentElement = this; return child; }
+    get firstChild() { return this.children[0] || null; }
+    insertBefore(child, next) {
+      if (!next) return this.appendChild(child);
+      this.children.splice(this.children.indexOf(next), 0, child); child.parentElement = this; return child;
+    }
     set innerHTML(_) { throw new Error('TrustedHTML required'); }
     hasAttribute(key) { return key in this.attrs; }
     matches() { return this.open === true; }
@@ -28,7 +33,10 @@ function fixture() {
     getBoundingClientRect() { return this.rect; }
     contains(element) { return this.children?.includes(element) || this === element; }
     querySelectorAll() { return []; }
-    remove() { this.isConnected = false; }
+    remove() {
+      if (this.parentElement) this.parentElement.children = this.parentElement.children.filter(child => child !== this);
+      this.isConnected = false;
+    }
     focus() { this.focused = true; }
     attachShadow() {
       this.shadow = new Element();
@@ -66,7 +74,7 @@ function fixture() {
     setInterval(callback) { const key = ++sequence; timers.set(key, callback); return key; },
     clearInterval(key) { timers.delete(key); }, requestAnimationFrame(callback) { const key = ++sequence; frames.set(key, callback); return key; },
     cancelAnimationFrame(key) { frames.delete(key); },
-    setTimeout(callback) { const key = ++sequence; timers.set(key, callback); return key; },
+    setTimeout(callback) { const key = ++sequence; timers.set(key, () => { timers.delete(key); callback(); }); return key; },
     clearTimeout(key) { timers.delete(key); },
     __easyagNow: () => clock
   });
@@ -75,7 +83,8 @@ function fixture() {
     tick() { for (const callback of timers.values()) callback(); },
     advance(milliseconds) { clock += milliseconds; },
     setAnchors(value) { anchors = value; }, setModel(value) { anchor.textContent = value; },
-    install(enabled = true) { installContextWidget(win, doc, enabled, event => sent.push(event)); }
+    install(next = options, binding, readId) { installContextWidget(win, doc, next, event => sent.push(event), readId, binding); },
+    receiveQuota(sample) { win.__easyagContext.receive(sent.findLast(event => event.type === 'quota-metrics').requestId, sample); }
   };
 }
 
@@ -93,7 +102,7 @@ const allText = node => [
 
 test('widget has a compact context marker; speed appears only in closable details', () => {
   const f = fixture(); f.install();
-  assert.equal(f.sent.length, 1);
+  assert.deepEqual(f.sent.map(request => request.type), ['context-metrics', 'quota-metrics']);
   f.win.__easyagContext.receive(f.sent[0].requestId, result());
   const trigger = f.shadow.getElementById('trigger'), card = f.shadow.getElementById('details');
   assert.equal(f.shadow.getElementById('context-value').textContent, '40');
@@ -113,7 +122,7 @@ test('widget has a compact context marker; speed appears only in closable detail
 });
 
 test('navigation clears the prior context and ignores a late response from another conversation', () => {
-  const f = fixture(); f.install();
+  const f = fixture({ context: true }); f.install();
   const old = f.sent[0];
   f.win.location.pathname = '/c/' + nextId; f.tick();
   assert.equal(f.sent.length, 2);
@@ -133,20 +142,62 @@ test('new conversation keeps the indicators visible until a conversation exists'
   assert.equal(f.sent[0].type, 'quota-metrics');
   assert.equal(f.shadow.getElementById('context-value').textContent, '—');
   assert.equal(f.shadow.getElementById('quota-trigger').dataset.state, 'unknown');
-  assert.match(f.shadow.getElementById('updated').textContent, /正在读取本地统计/);
+  assert.match(f.shadow.getElementById('updated').textContent, /打开对话/);
   f.win.location.pathname = '/c/' + id;
   f.tick();
   assert.equal(f.sent.length, 2, 'Entering a conversation starts the context statistics flow');
   f.win.__easyagContext.dispose();
 });
 
+test('each toggle controls only its own marker, details and sampling, including on a new conversation', () => {
+  for (const context of [false, true]) for (const quota of [false, true]) {
+    const f = fixture({ context, quota });
+    let route = null;
+    f.install({ context, quota }, 'test-binding', () => {
+      assert.ok(context, 'quota alone must not inspect the current conversation');
+      return route;
+    });
+    assert.deepEqual(f.sent.map(event => event.type), quota ? ['quota-metrics'] : []);
+    assert.equal(Boolean(f.shadow?.getElementById('details')), context);
+    assert.equal(Boolean(f.shadow?.getElementById('trigger')), context);
+    assert.equal(Boolean(f.shadow?.getElementById('quota-details')), quota);
+    assert.equal(Boolean(f.shadow?.getElementById('quota-trigger')), quota);
+    route = id;
+    f.tick();
+    assert.deepEqual(f.sent.map(event => event.type),
+      [...(quota ? ['quota-metrics'] : []), ...(context ? ['context-metrics'] : [])]);
+    for (const event of f.sent) {
+      if (event.type === 'quota-metrics') assert.equal(event.conversationId, undefined);
+      if (event.type === 'context-metrics') assert.equal(event.forceQuota, undefined);
+    }
+    f.win.__easyagContext?.dispose();
+  }
+});
+
+test('turning context off during a pending read preserves an open quota card and its sample', () => {
+  const f = fixture();
+  f.install({ context: true, quota: true }, 'session');
+  const slowContext = f.sent.find(event => event.type === 'context-metrics');
+  const quota = f.shadow.getElementById('quota-trigger');
+  f.receiveQuota(quotaResult([{ id: 'gemini', displayName: 'Gemini 4 Argon', buckets: [{ remainingFraction: .25 }] }], null));
+  quota.events.click();
+  f.install({ context: false, quota: true }, 'session');
+  assert.equal(f.shadow.getElementById('quota-trigger'), quota);
+  assert.equal(f.shadow.getElementById('quota-details').open, true);
+  assert.equal(f.shadow.getElementById('quota-value').textContent, '25');
+  f.win.__easyagContext.receive(slowContext.requestId, result());
+  assert.equal(f.shadow.getElementById('trigger'), undefined);
+  assert.equal(f.sent.filter(event => event.type === 'quota-metrics').length, 1);
+  f.win.__easyagContext.dispose();
+});
+
 test('unsupported/narrow layouts stay untouched and disabling removes timers and listeners', () => {
   const f = fixture(); f.setAnchors([]); f.install();
   assert.equal(f.node, undefined); assert.equal(f.sent.length, 0);
-  f.install(false); assert.equal(f.timers.size, 0); assert.equal(f.win.__easyagContext, undefined);
+  f.install({}); assert.equal(f.timers.size, 0); assert.equal(f.win.__easyagContext, undefined);
   const narrow = fixture(); narrow.row.rect.right = 150; narrow.row.rect.width = 150;
   narrow.install(); assert.equal(narrow.node.hidden, true); assert.equal(narrow.sent.length, 0);
-  narrow.install(false); assert.equal(narrow.node.isConnected, false);
+  narrow.install({}); assert.equal(narrow.node.isConnected, false);
   assert.equal(narrow.timers.size, 0); assert.equal(narrow.frames.size, 0);
   assert.equal(narrow.doc.events.keydown, undefined);
 });
@@ -213,7 +264,7 @@ test('model usage ring selects the exact model and shows official-style quota wi
       buckets: [{ id: '5h', displayName: '5h limit', remainingFraction: .44 }]
     }
   ];
-  f.win.__easyagContext.receive(f.sent[0].requestId, quotaResult(groups));
+  f.receiveQuota(quotaResult(groups));
   const quotaButton = f.shadow.getElementById('quota-trigger');
   const quotaCard = f.shadow.getElementById('quota-details');
   const quotaBody = f.shadow.getElementById('quota-body');
@@ -243,26 +294,26 @@ test('model usage ring falls back to a shared family quota and keeps unknown dis
     id: 'gemini-models', displayName: 'Gemini Models', family: 'gemini',
     buckets: [{ id: 'weekly', displayName: 'Weekly limit', remainingFraction: .73 }]
   };
-  f.win.__easyagContext.receive(f.sent[0].requestId, quotaResult([shared]));
+  f.receiveQuota(quotaResult([shared]));
   const quotaButton = f.shadow.getElementById('quota-trigger');
   assert.match(quotaButton.attrs['aria-label'], /73%/);
   assert.equal(quotaButton.dataset.state, 'live');
-  f.win.location.pathname = '/c/' + nextId; f.tick();
+  f.win.location.pathname = '/c/' + nextId; f.advance(60000); f.tick();
   const unknown = quotaResult([{
     id: 'gemini-unknown', displayName: 'Gemini 2.5 Pro', family: 'gemini',
     buckets: [{ id: 'weekly', displayName: 'Weekly limit', remainingFraction: null }]
   }], nextId);
-  f.win.__easyagContext.receive(f.sent.at(-1).requestId, unknown);
+  f.receiveQuota(unknown);
   assert.equal(quotaButton.dataset.state, 'unknown');
   assert.match(quotaButton.attrs['aria-label'], /不可用/);
   assert.equal(f.shadow.getElementById('quota-value').textContent, '—');
   assert.equal(f.shadow.getElementById('quota-fill').style.strokeDashoffset, '62.832');
-  f.win.location.pathname = '/c/' + id; f.tick();
+  f.win.location.pathname = '/c/' + id; f.advance(60000); f.tick();
   const zero = quotaResult([{
     id: 'gemini-zero', displayName: 'Gemini 2.5 Pro', family: 'gemini',
     buckets: [{ id: 'weekly', displayName: 'Weekly limit', remainingFraction: 0 }]
   }]);
-  f.win.__easyagContext.receive(f.sent.at(-1).requestId, zero);
+  f.receiveQuota(zero);
   assert.equal(quotaButton.dataset.state, 'live');
   assert.equal(f.shadow.getElementById('quota-value').textContent, '0');
   assert.match(quotaButton.attrs['aria-label'], /0%/);
@@ -271,7 +322,7 @@ test('model usage ring falls back to a shared family quota and keeps unknown dis
 
 test('model usage ring shows a sub-percent exhausted quota as zero', () => {
   const f = fixture(); f.install();
-  f.win.__easyagContext.receive(f.sent[0].requestId, quotaResult([{
+  f.receiveQuota(quotaResult([{
     id: 'gemini-argon',
     displayName: 'Gemini 4 Argon',
     family: 'gemini',
@@ -287,10 +338,10 @@ test('model usage ring shows a sub-percent exhausted quota as zero', () => {
 });
 
 test('model usage refreshes every minute and after sending a message', () => {
-  const f = fixture(); f.install();
+  const f = fixture({ quota: true }); f.install();
   assert.equal(f.sent.length, 1);
-  assert.equal(f.sent[0].type, 'context-metrics');
-  f.win.__easyagContext.receive(f.sent[0].requestId, quotaResult([]));
+  assert.equal(f.sent[0].type, 'quota-metrics');
+  f.receiveQuota(quotaResult([]));
 
   f.advance(60000); f.tick();
   assert.equal(f.sent.length, 2);
@@ -299,6 +350,7 @@ test('model usage refreshes every minute and after sending a message', () => {
   f.doc.events.keydown({ key: 'Enter', shiftKey: false, isComposing: false, target: f.editor });
   f.tick();
   f.win.__easyagContext.receive(f.sent[1].requestId, quotaResult([]));
+  f.advance(1500); f.tick();
   assert.equal(f.sent.length, 3);
   assert.equal(f.sent.at(-1).forceQuota, true);
   f.win.__easyagContext.dispose();

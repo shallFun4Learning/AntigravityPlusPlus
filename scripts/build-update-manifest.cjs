@@ -61,7 +61,8 @@ const runtimeFiles = [
   'desktop/host.js',
   'ui/api.js',
   'ui/launcher.css',
-  'ui/launcher.js'
+  'ui/launcher.js',
+  'ui/workspace.js'
 ];
 
 const files = {};

@@ -127,6 +127,7 @@ class ContextMonitor {
     this.client = client;
     this.generation = 0;
     this.pending = new Map();
+    this.controller = new AbortController();
   }
 
   sample(id) {
@@ -141,7 +142,7 @@ class ContextMonitor {
   }
 
   async collect(id, generation) {
-    const signal = AbortSignal.timeout(20000);
+    const signal = AbortSignal.any([AbortSignal.timeout(20000), this.controller.signal]);
     try {
       // Verify the same account and backend both before and after collecting.
       const server = await this.client.discover();
@@ -163,7 +164,8 @@ class ContextMonitor {
   reset() {
     this.generation++;
     this.pending.clear();
-    this.client.reset();
+    this.controller.abort();
+    this.controller = new AbortController();
   }
 }
 

@@ -38,6 +38,14 @@ function createAccountManager({
   resolveOAuthClient,
   fetchImpl = globalThis.fetch
 }) {
+  let switchStatus = null;
+  let revision = 0;
+
+  function updateSwitch(target, accountId, stage, state = 'working', detail = {}) {
+    switchStatus = { target, accountId, stage, state, revision: ++revision, ...detail };
+    events.publish?.({ accountSwitch: switchStatus });
+  }
+
   function resolveTarget(requested) {
     const explicit = targetId(requested);
     if (explicit) return explicit;
@@ -91,6 +99,7 @@ function createAccountManager({
   }
 
   return {
+    get switchStatus() { return switchStatus; },
     list() {
       return {
         accounts: store.list(),
@@ -155,53 +164,59 @@ function createAccountManager({
     },
 
     async switch(accountId, requestedTarget) {
+      if (switchStatus?.state === 'working') throw new Error('正在切换账号，请等待本次操作完成');
       const target = resolveTarget(requestedTarget);
       const selected = store.get(accountId);
       if (selected.disabled) throw new Error(`账号已停用: ${selected.disabledReason || selected.email}`);
       const previous = store.current(target);
       const previousSecrets = previous ? store.getSecrets(previous.id) : null;
       const info = targetInfo(target);
-      const sessionWasRunning = session.phase !== 'idle';
-      const targetWasRunning = await desktop.running(info);
-      const wasRunning = sessionWasRunning || targetWasRunning;
-
-      if (sessionWasRunning) {
-        const stopped = await session.stopOnly();
-        if (!stopped.ok) throw Object.assign(new Error(stopped.error), { code: stopped.code || 'STOP_FAILED' });
-      } else if (targetWasRunning) {
-        if (!desktop.stop) {
-          throw Object.assign(new Error('当前环境不支持自动退出 Antigravity，无法完成账号切换'), { code: 'STOP_FAILED' });
-        }
-        const stopped = await desktop.stop(target, { cancelled: () => false });
-        if (!stopped?.ok || await desktop.running(info)) {
-          throw Object.assign(new Error('Antigravity 未能退出，账号切换已停止，请稍后重试'), { code: 'STOP_FAILED' });
-        }
-        events.log('SYSTEM', `${info.name || target} 已退出，可以切换账号`, 'tag-proxy');
-      }
-      if (await desktop.running(info)) {
-        throw Object.assign(new Error(`${info.name || target} 仍在运行，请先退出后再切换账号`), { code: 'PROCESS_CONFLICT' });
-      }
-
-      let prepared;
+      const advance = stage => updateSwitch(target, accountId, stage);
+      advance('checking');
+      let wasRunning = false;
+      let restoreOnFailure = false;
       try {
-        prepared = await freshAccount(accountId);
+        if (['preparing', 'launching', 'cleaning'].includes(session.phase)) throw new Error('请等待客户端操作完成');
+        if (session.phase === 'running' && session.activeTarget?.id && session.activeTarget.id !== target) {
+          throw new Error('另一个客户端正在运行，请先退出后再切换账号');
+        }
+        const targetWasRunning = await desktop.running(info);
+        const sessionWasRunning = session.phase === 'running';
+        wasRunning = sessionWasRunning || targetWasRunning;
+        if (wasRunning) advance('stopping');
+        if (sessionWasRunning) {
+          const stopped = await session.stopOnly(target);
+          if (!stopped.ok) throw Object.assign(new Error(stopped.error), { code: stopped.code || 'STOP_FAILED' });
+        } else if (targetWasRunning) {
+          if (!desktop.stop) throw Object.assign(new Error('当前环境不支持自动退出 Antigravity'), { code: 'STOP_FAILED' });
+          const stopped = await desktop.stop(target, { cancelled: () => false });
+          if (!stopped?.ok) throw Object.assign(new Error('Antigravity 未能退出，请稍后重试'), { code: 'STOP_FAILED' });
+        }
+        if (await desktop.running(info)) {
+          throw Object.assign(new Error(`${info.name || target} 仍在运行，请先退出后再切换账号`), { code: 'PROCESS_CONFLICT' });
+        }
+        restoreOnFailure = true;
+        advance('writing');
+        const prepared = await freshAccount(accountId);
         await credentialWriter({
           target,
           targetInfo: info,
           account: prepared.account,
           secrets: prepared.secrets
         });
-        store.setCurrent(accountId, target);
         await configure({ targetApp: target });
 
         let launchResult = { ok: true, launched: false };
         if (info.exists || wasRunning) {
+          advance('launching');
           launchResult = await session.launch();
           if (!launchResult.ok) {
             throw Object.assign(new Error(launchResult.error), { code: launchResult.code || 'LAUNCH_FAILED' });
           }
           launchResult = { ...launchResult, launched: true };
         }
+        store.setCurrent(accountId, target);
+        updateSwitch(target, accountId, 'complete', 'done', { launched: Boolean(launchResult.launched) });
         events.log('ACCOUNT', `已切换到 ${prepared.account.email}（${target === 'ide' ? 'IDE 版' : '桌面版'}）`, 'tag-proxy');
         return publicResult(prepared.account, {
           ok: true,
@@ -210,7 +225,12 @@ function createAccountManager({
           requiresLaunch: !info.exists
         });
       } catch (error) {
-        await restorePrevious(target, previous, previousSecrets, wasRunning);
+        const failedAt = switchStatus.stage;
+        if (restoreOnFailure) {
+          advance('restoring');
+          await restorePrevious(target, previous, previousSecrets, wasRunning);
+        }
+        updateSwitch(target, accountId, failedAt, 'failed', { error: error.message });
         throw error;
       }
     },

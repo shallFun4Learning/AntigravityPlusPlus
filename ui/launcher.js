@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { accountDisplayName, clearActivity, createAccountPanel, openView, recordActivity, showNotice } from './workspace.js';
 
 const element = id => document.getElementById(id);
 const consoleBox = element('consoleBox');
@@ -9,12 +10,19 @@ let stream;
 let pollTimer;
 let launchPending = false;
 let cleanupPending = false;
-let activeTarget = 'hub';
-let activeTargetName = 'Antigravity';
-let clientRunningState = false;
+let viewedTarget = 'hub';
+let userSelectedTarget = false;
+let sessionTarget = 'hub';
+let pendingLaunchTarget = null;
+let restartTarget = null;
+let cdpSockets = 0;
+let cdpError = '';
+let dictEntries = 0;
+const enhancementControls = { enableI18n: 'i18nToggle', enableContextMonitor: 'contextMonitorToggle', enableQuotaMonitor: 'quotaMonitorToggle' };
+const enhancements = { enableI18n: true, enableContextMonitor: true, enableQuotaMonitor: true };
+const pendingEnhancements = new Map();
 let currentTargets = {};
 let accountState = { accounts: [], currentByTarget: { hub: null, ide: null } };
-let pathModalDismissed = false;
 let accountOAuthPollTimer = null;
 let accountOAuthPollInFlight = false;
 let accountOAuthAttempt = 0;
@@ -23,7 +31,18 @@ let accountRiskAcknowledged = false;
 let accountRiskResolver = null;
 let accountRiskSaving = false;
 let accountRiskReturnFocus = null;
+let switchPending = false;
+let switchProgress = null;
+let portDraft = false;
+let savedPort = 7890;
+let modalOpener = null;
+let importPending = false;
 const logKeys = new Set();
+const accountPanel = createAccountPanel({
+  onSwitch: id => runAccountAction(() => switchAccount(id)),
+  onRefresh: id => runAccountAction(() => refreshAccount(id)),
+  onDelete: id => runAccountAction(() => deleteAccount(id))
+});
 
 // Suppress the embedded browser's default menu in the launcher.
 document.addEventListener('contextmenu', event => event.preventDefault());
@@ -38,30 +57,37 @@ function appendLog(category, message, cls = '', at) {
   const line = document.createElement('div');
   line.className = 'log-line';
   if (/^tag-[a-z-]+$/.test(cls)) line.classList.add(cls);
-  const time = new Date(at || Date.now()).toLocaleTimeString();
+  const time = new Date(at || Date.now()).toLocaleTimeString('zh-CN', { hour12: false });
   line.textContent = `[${time}] [${category || 'SYSTEM'}] ${message || ''}`;
   consoleBox.appendChild(line);
   while (consoleBox.children.length > 300) consoleBox.firstElementChild.remove();
   consoleBox.scrollTop = consoleBox.scrollHeight;
+  recordActivity(time, category || 'SYSTEM', message || '');
 }
 
-function report(error) { appendLog('SYSTEM', error.message || String(error), 'tag-alert'); }
+function report(error) {
+  const message = error.message || String(error);
+  showNotice(message, 'error');
+  appendLog('SYSTEM', message, 'tag-alert');
+}
+
+function switching() { return switchPending || switchProgress?.state === 'working'; }
 
 function updateProxyUi(enabled) {
   const row = element('proxyPortRow');
   const badge = element('patchStatusBadge');
-  const busyOrRunning = ['preparing', 'launching', 'running', 'cleaning'].includes(phase);
+  const busyOrRunning = switching() || ['preparing', 'launching', 'running', 'cleaning'].includes(phase);
   if (row) row.classList.toggle('disabled', !enabled);
-  document.querySelectorAll('[data-port]').forEach(control => {
+  document.querySelectorAll('[data-port], #customPortBtn').forEach(control => {
     control.disabled = !enabled || busyOrRunning;
   });
   if (element('proxyPortInput')) {
     element('proxyPortInput').disabled = !enabled || busyOrRunning;
   }
   if (badge) {
-    badge.textContent = enabled ? '· 本地代理就绪' : '· 直连模式（不挂代理）';
-    badge.style.color = enabled ? 'var(--green)' : 'var(--text-dark)';
+    badge.textContent = enabled ? '仅用于 Antigravity 进程' : '直连模式';
   }
+  updatePortSelection();
 }
 
 function isValidPort(value) {
@@ -101,77 +127,95 @@ function updatePortSelection() {
 
   const state = element('portCurrentState');
   const hint = element('portSelectionHint');
-  const selectedName = selectedControl?.querySelector('.tag-hint')?.textContent.trim();
+  const selectedName = selectedControl?.dataset.name;
+  element('customPortBtn').classList.toggle('active', valid && !selectedControl);
   if (state) {
     state.classList.toggle('custom', !selectedControl);
     state.classList.toggle('invalid', Boolean(value) && !valid);
     state.textContent = selectedControl
       ? `已选择 ${value}`
-      : value
-        ? `自定义 ${value}`
-        : '等待输入';
+      : valid ? `自定义 ${value}` : '待输入有效端口';
   }
   if (hint) {
-    hint.textContent = selectedName
-      ? `已选择 ${selectedName} · 也可输入自定义端口`
-      : value
-        ? valid ? '自定义端口 · 可输入 1–65535' : '端口范围为 1–65535'
-        : '请输入 1–65535 的端口';
+    if (!element('proxyToggle').checked) hint.textContent = '直连模式已开启。';
+    else if (input.disabled) hint.textContent = '客户端结束运行后可更改端口。';
+    else if (selectedName) hint.textContent = `${selectedName} 常用端口 · 也可输入自定义端口`;
+    else hint.textContent = valid ? '自定义端口' : '请输入 1–65535 的整数';
   }
 }
 
-function updateEnhancementMonitorUi() {
-  const master = element('enhancementMonitorToggle');
-  const i18n = element('i18nToggle');
-  const context = element('contextMonitorToggle');
-  if (!master || !i18n || !context) return;
-  const i18nEnabled = i18n.checked;
-  const contextEnabled = context.checked;
-  master.checked = i18nEnabled && contextEnabled;
-  master.indeterminate = i18nEnabled !== contextEnabled;
-  master.title = master.indeterminate
-    ? '总开关：界面深度汉化或 AG 内监控处于部分开启状态'
-    : '总开关：同时启用或关闭界面深度汉化和 AG 内上下文、模型用量监控';
+function targetLabel(target) { return target === 'ide' ? 'IDE 版' : '桌面版'; }
+function clientName(target = viewedTarget) { return currentTargets[target]?.name || (target === 'ide' ? 'Antigravity IDE' : 'Antigravity'); }
+function sessionInUse() { return ['running', 'preparing', 'launching', 'cleaning'].includes(phase); }
+function controllingTarget() { return (switching() && switchProgress?.target) || pendingLaunchTarget || sessionTarget; }
+function viewingOtherSession() { return (switching() || sessionInUse()) && controllingTarget() !== viewedTarget; }
+function targetMissing() { return currentTargets[viewedTarget]?.exists === false; }
+function switchBlockedReason() {
+  if (targetMissing()) return `未检测到${targetLabel(viewedTarget)}，请先安装或设置路径。`;
+  if (viewingOtherSession()) return `请先退出${targetLabel(controllingTarget())}，再切换${targetLabel(viewedTarget)}账号。`;
+  if (['preparing', 'launching', 'cleaning'].includes(phase)) return '请等待客户端操作完成。';
+  return '';
 }
 
-function renderPhase(next, targetName = activeTargetName) {
+function applicableEnhancements() {
+  return Object.keys(enhancementControls).filter(key => key !== 'enableI18n' || viewedTarget !== 'ide');
+}
+function updateEnhancementMonitorUi() {
+  const keys = applicableEnhancements();
+  const readOnly = viewingOtherSession();
+  for (const [key, id] of Object.entries(enhancementControls)) {
+    const available = keys.includes(key);
+    element(id).checked = available && enhancements[key];
+    element(id).disabled = readOnly || !available;
+  }
+  const master = element('enhancementMonitorToggle');
+  const count = keys.filter(key => enhancements[key]).length;
+  master.checked = count === keys.length;
+  master.indeterminate = count > 0 && !master.checked;
+  master.disabled = readOnly;
+  master.title = `已开启 ${count} / ${keys.length} 项增强功能`;
+  element('contextPreview').hidden = !enhancements.enableContextMonitor;
+  element('quotaPreview').hidden = !enhancements.enableQuotaMonitor;
+  element('emptyPreview').hidden = enhancements.enableContextMonitor || enhancements.enableQuotaMonitor;
+  element('dictCountBadge').textContent = viewedTarget === 'ide' ? '仅适用于桌面版' : `${dictEntries} 个词条`;
+}
+
+function renderPhase(next) {
   phase = next;
   document.body.dataset.uiState = next;
   const busy = ['preparing', 'launching', 'cleaning'].includes(next);
-  const locked = busy || next === 'running';
+  const locked = sessionInUse() || switching();
+  const other = viewingOtherSession();
   const button = element('launchBtn');
-  button.disabled = busy;
-  button.title = next === 'running' ? '点击处理已有进程' : '';
-  button.classList.toggle('busy', busy);
-  if (element('proxyToggle')) element('proxyToggle').disabled = locked;
-  document.querySelectorAll('[data-target]').forEach(control => { control.disabled = locked; });
-  const proxyEnabled = element('proxyToggle') ? element('proxyToggle').checked : true;
-  document.querySelectorAll('[data-port]').forEach(control => { control.disabled = locked || !proxyEnabled; });
-  element('proxyPortInput').disabled = locked || !proxyEnabled;
-
-  const currentObj = currentTargets[activeTarget] || {};
-  const isMissing = !currentObj.exists && next === 'idle';
-
-  if (isMissing) {
-    element('launchIcon').textContent = '!';
-    element('launchText').textContent = `请先配置 ${targetName} 路径`;
-    button.style.background = 'var(--surface-subtle)';
-    button.style.color = 'var(--text-dark)';
-    return;
+  button.disabled = other || busy || switching();
+  button.title = other ? `正在查看${targetLabel(viewedTarget)}设置` : next === 'running' ? '确认后重新启动客户端' : '';
+  button.classList.toggle('busy', busy && !other);
+  element('proxyToggle').disabled = locked;
+  element('editTargetPath').disabled = locked;
+  element('accountAddBtn').disabled = switching();
+  element('accountImportBtn').disabled = switching() || importPending || targetMissing() || other;
+  const proxyEnabled = element('proxyToggle').checked;
+  updateProxyUi(proxyEnabled);
+  updateEnhancementMonitorUi();
+  renderTargetsUi();
+  let icon = '▷', text = `启动 ${clientName()}`;
+  if (other) {
+    text = `启动 ${targetLabel(viewedTarget)}`;
+  } else if (switching()) {
+    icon = '◌'; text = '正在切换账号…';
+  } else if (targetMissing() && !locked) {
+    icon = '+'; text = '配置启动路径';
+  } else if (busy) {
+    icon = '◌';
+    text = { preparing: proxyEnabled ? '正在准备代理环境…' : '正在准备启动环境…', launching: `正在启动 ${clientName()}…`, cleaning: '正在清理并重新启动…' }[next];
+  } else if (next === 'running') {
+    icon = '↻'; text = `重启 ${clientName()}`;
+  } else if (next === 'error' && viewedTarget === sessionTarget) {
+    icon = '↻'; text = '启动失败，点击重试';
   }
-
-  button.style.color = '';
-  element('launchIcon').textContent = busy ? '◌' : next === 'running' ? '●' : next === 'error' ? '↻' : '▶';
-  element('launchText').textContent = {
-    preparing: proxyEnabled ? '正在准备代理环境…' : '正在准备启动环境…',
-    launching: `正在启动 ${targetName}…`,
-    cleaning: '正在清理并重新启动…',
-    running: `${targetName} 运行中`,
-    error: '启动失败，点击重试'
-  }[next] || `启动 ${targetName}`;
-  button.style.background = next === 'running' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : '';
+  element('launchIcon').textContent = icon;
+  element('launchText').textContent = text;
 }
-
 
 function showModalError(msg) {
   const tip = element('pathEditTip');
@@ -186,6 +230,8 @@ function showPathModal(visible, customTitle, customDesc) {
   const modal = element('pathModal');
   if (!modal) return;
   if (visible && modal.style.display === 'flex') return;
+  if (!visible && modal.style.display === 'none') return;
+  if (visible) modalOpener = document.activeElement;
   modal.style.display = visible ? 'flex' : 'none';
   if (visible) {
     const titleEl = element('modalTargetTitle');
@@ -193,45 +239,44 @@ function showPathModal(visible, customTitle, customDesc) {
     const input = element('customPathInput');
     const resetBtn = element('resetPathBtn');
     const errorTip = element('pathEditTip');
-    const activeObj = currentTargets[activeTarget] || {};
+    const activeObj = currentTargets[viewedTarget] || {};
 
-    if (titleEl) titleEl.textContent = customTitle || `未找到 ${activeTargetName}`;
-    if (descEl) descEl.textContent = customDesc || `未在默认路径检测到 ${activeTargetName}。如安装在非 C 盘，请点击“浏览”指定 .exe 文件路径：`;
+    if (titleEl) titleEl.textContent = customTitle || `未找到 ${clientName()}`;
+    if (descEl) descEl.textContent = customDesc || `请选择或输入 ${clientName()} 的安装路径。`;
     if (input) {
       input.value = activeObj.appExe || '';
       input.focus();
     }
     if (resetBtn) resetBtn.style.display = activeObj.isCustom ? 'inline-flex' : 'none';
     if (errorTip) errorTip.style.display = 'none';
-  }
+  } else modalOpener?.focus();
 }
 
-function renderTargetsUi(targets, currentActive) {
-  const hubTarget = targets.hub || {};
-  const ideTarget = targets.ide || {};
-
-  element('targetHubBtn')?.classList.toggle('active', currentActive === 'hub');
-  element('targetIdeBtn')?.classList.toggle('active', currentActive === 'ide');
-
-  const hubDot = element('hubDot');
-  if (hubDot) {
-    hubDot.className = 'pill-dot ' + (hubTarget.isCustom ? 'custom' : (hubTarget.exists ? 'ready' : 'missing'));
-    hubDot.title = hubTarget.exists ? (hubTarget.isCustom ? '已配置自定义路径' : '已就绪 (默认路径)') : '未在默认路径检测到，点击配置';
+function renderTargetsUi() {
+  for (const button of document.querySelectorAll('[data-target]')) {
+    const target = button.dataset.target;
+    const missing = currentTargets[target]?.exists === false;
+    button.setAttribute('aria-pressed', String(target === viewedTarget));
+    button.querySelector('small').hidden = !missing;
+    button.title = `查看${targetLabel(target)}设置${missing ? '（未检测到客户端）' : ''}`;
   }
-  const ideDot = element('ideDot');
-  if (ideDot) {
-    ideDot.className = 'pill-dot ' + (ideTarget.isCustom ? 'custom' : (ideTarget.exists ? 'ready' : 'missing'));
-    ideDot.title = ideTarget.exists ? (ideTarget.isCustom ? '已配置自定义路径' : '已就绪 (默认路径)') : '未在默认路径检测到，点击配置';
+  const missing = targetMissing(), other = viewingOtherSession();
+  const notice = element('targetNotice');
+  notice.hidden = !missing && !other;
+  notice.dataset.missing = String(missing);
+  const title = missing ? `未检测到 ${clientName()}` : `正在查看 ${targetLabel(viewedTarget)}设置`;
+  const hint = other ? `${targetLabel(controllingTarget())}正在使用中，可在此查看 ${targetLabel(viewedTarget)}设置。`
+    : '可以先查看设置。若已安装到其他位置，请配置启动路径。';
+  if (!notice.hidden) {
+    if (element('targetNoticeTitle').textContent !== title) element('targetNoticeTitle').textContent = title;
+    if (element('targetNoticeText').textContent !== hint) element('targetNoticeText').textContent = hint;
   }
-
-  const activeObj = currentActive === 'ide' ? ideTarget : hubTarget;
-  if (!activeObj.exists && !pathModalDismissed) {
-    showPathModal(true);
-  }
-}
-
-function accountDisplayName(account) {
-  return account.label || account.email || '未命名账号';
+  element('targetPathText').textContent = currentTargets[viewedTarget]?.appExe || '尚未检测到客户端路径。';
+  const running = !other && phase === 'running';
+  const badge = element('clientStatusBadge');
+  badge.classList.toggle('active', running);
+  badge.querySelector('span').textContent = running ? (cdpSockets ? '增强已连接' : '运行中') : missing ? '未检测到' : '未运行';
+  badge.title = running && cdpError ? cdpError : `${targetLabel(viewedTarget)} · ${badge.querySelector('span').textContent}`;
 }
 
 function renderAccounts(nextState = accountState) {
@@ -242,101 +287,22 @@ function renderAccounts(nextState = accountState) {
       ide: nextState?.currentByTarget?.ide || null
     }
   };
-  const list = element('accountList');
-  const summary = element('accountCurrentSummary');
-  if (!list) return;
-  const currentId = accountState.currentByTarget[activeTarget];
-  const current = accountState.accounts.find(account => account.id === currentId);
-  if (summary) {
-    summary.textContent = current
-      ? `${activeTarget === 'ide' ? 'IDE 版' : '桌面版'}当前：${accountDisplayName(current)}`
-      : `${activeTarget === 'ide' ? 'IDE 版' : '桌面版'}尚未选择当前账号`;
-  }
-  list.replaceChildren();
-  if (!accountState.accounts.length) {
-    const empty = document.createElement('div');
-    empty.className = 'account-empty';
-    empty.textContent = '还没有保存账号，可以先添加一个 OAuth 凭据。';
-    list.appendChild(empty);
-    return;
-  }
-  for (const account of accountState.accounts) {
-    const item = document.createElement('div');
-    item.className = 'account-item' + (account.id === currentId ? ' current' : '');
-
-    const main = document.createElement('div');
-    main.className = 'account-item-main';
-    const title = document.createElement('div');
-    title.className = 'account-item-title';
-    const name = document.createElement('span');
-    name.textContent = accountDisplayName(account);
-    title.appendChild(name);
-    if (account.id === currentId) {
-      const badge = document.createElement('span');
-      badge.className = 'account-current-badge';
-      badge.textContent = '当前';
-      title.appendChild(badge);
-    }
-    const email = document.createElement('span');
-    email.className = 'account-item-meta';
-    email.textContent = account.email || '邮箱未知';
-    main.append(title, email);
-
-    const meta = document.createElement('div');
-    meta.className = 'account-item-meta';
-    const tokenBadge = document.createElement('span');
-    tokenBadge.className = 'account-token-badge';
-    tokenBadge.textContent = account.hasRefreshToken ? '可刷新' : (account.hasAccessToken ? '仅访问令牌' : '缺少令牌');
-    meta.appendChild(tokenBadge);
-    if (account.tokenExpiresAt) {
-      const expiry = document.createElement('span');
-      expiry.textContent = `到期 ${new Date(account.tokenExpiresAt).toLocaleDateString()}`;
-      meta.appendChild(expiry);
-    }
-    main.appendChild(meta);
-
-    const actions = document.createElement('div');
-    actions.className = 'account-item-actions';
-    if (account.id !== currentId) {
-      const switchButton = document.createElement('button');
-      switchButton.type = 'button';
-      switchButton.className = 'clean-btn';
-      switchButton.textContent = '切换';
-      switchButton.title = '退出当前客户端并切换到此账号';
-      switchButton.addEventListener('click', () => runAccountAction(() => switchAccount(account.id)));
-      actions.appendChild(switchButton);
-    }
-    if (account.hasRefreshToken) {
-      const refreshButton = document.createElement('button');
-      refreshButton.type = 'button';
-      refreshButton.className = 'clean-btn';
-      refreshButton.textContent = '刷新';
-      refreshButton.addEventListener('click', () => runAccountAction(() => refreshAccount(account.id)));
-      actions.appendChild(refreshButton);
-    }
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.className = 'clean-btn danger';
-    deleteButton.textContent = '删除';
-    deleteButton.addEventListener('click', () => runAccountAction(() => deleteAccount(account.id)));
-    actions.appendChild(deleteButton);
-
-    item.append(main, actions);
-    list.appendChild(item);
-  }
+  accountPanel.render({ ...accountState, target: viewedTarget, progress: switchProgress, locked: switching(), switchBlockedReason: switchBlockedReason() });
 }
 
 function renderStatus(status) {
   if (status.accountRiskAcknowledged === true) accountRiskAcknowledged = true;
+  if (status.accountSwitch && status.accountSwitch.revision > (switchProgress?.revision || 0)) {
+    switchProgress = status.accountSwitch;
+  }
   if (status.activeTarget) {
-    activeTarget = status.activeTarget;
-    activeTargetName = status.targetName || (status.activeTarget === 'ide' ? 'Antigravity IDE' : 'Antigravity');
+    sessionTarget = status.activeTarget;
+    if (!userSelectedTarget) viewedTarget = sessionTarget;
   }
-  if (status.targets) {
-    currentTargets = status.targets;
-    renderTargetsUi(currentTargets, activeTarget);
-  }
-  if (status.accounts) renderAccounts(status.accounts);
+  if (status.targets) currentTargets = status.targets;
+  if (status.dictEntries !== undefined) dictEntries = status.dictEntries;
+  if (status.cdpSockets !== undefined) cdpSockets = status.cdpSockets;
+  if (status.cdpError !== undefined) cdpError = status.cdpError;
   if (status.oauth && element('accountForm')?.style.display !== 'none') {
     renderAccountOAuthStatus(status.oauth);
   }
@@ -344,50 +310,22 @@ function renderStatus(status) {
     element('proxyToggle').checked = status.enableProxy;
     updateProxyUi(status.enableProxy);
   }
-  if (status.enableI18n !== undefined && element('i18nToggle')) element('i18nToggle').checked = status.enableI18n;
-  if (status.enableContextMonitor !== undefined && element('contextMonitorToggle')) {
-    element('contextMonitorToggle').checked = status.enableContextMonitor;
+  if (Number.isInteger(status.port) && !portDraft) {
+    savedPort = status.port;
+    element('proxyPortInput').value = String(savedPort);
+    updatePortSelection();
   }
-  updateEnhancementMonitorUi();
-  if (status.phase && !(launchPending && status.phase === 'idle')) renderPhase(status.phase, activeTargetName);
-  if (status.dictEntries !== undefined) {
-    element('dictCountBadge').textContent = `· 已载入 ${status.dictEntries} 词条`;
+  for (const key of Object.keys(enhancementControls)) {
+    if (status[key] !== undefined && !pendingEnhancements.has(key)) enhancements[key] = status[key];
   }
+  renderPhase((pendingLaunchTarget && status.phase === 'idle') ? phase : status.phase || phase);
+  renderAccounts(status.accounts || accountState);
   if (status.version) {
     const versionNode = element('versionBadge');
     if (versionNode) {
       versionNode.textContent = `v${status.version}`;
     }
   }
-  if (status.clientRunning !== undefined) {
-    clientRunningState = Boolean(status.clientRunning);
-    const badge = element('clientStatusBadge');
-    badge.className = status.clientRunning ? 'status-capsule active' : 'status-capsule';
-    badge.querySelector('span').textContent = status.clientRunning
-      ? status.cdpSockets ? '增强已连接' : '运行中'
-      : '未运行';
-    badge.title = status.cdpError || (status.clientRunning ? `${activeTargetName} 正在运行` : `${activeTargetName} 未运行`);
-    renderPhase(status.phase || phase, activeTargetName);
-  }
-}
-
-function loadSettings(status) {
-  if (status.activeTarget) {
-    activeTarget = status.activeTarget;
-    activeTargetName = status.targetName || (status.activeTarget === 'ide' ? 'Antigravity IDE' : 'Antigravity');
-  }
-  if (status.targets) {
-    currentTargets = status.targets;
-  }
-  if (status.accounts) renderAccounts(status.accounts);
-  element('proxyPortInput').value = status.port;
-  updatePortSelection();
-  if (element('proxyToggle')) element('proxyToggle').checked = status.enableProxy !== false;
-  element('i18nToggle').checked = status.enableI18n;
-  element('contextMonitorToggle').checked = status.enableContextMonitor;
-  updateEnhancementMonitorUi();
-  updateProxyUi(status.enableProxy !== false);
-  renderStatus(status);
 }
 
 function stopAccountOAuthPolling() {
@@ -442,8 +380,10 @@ async function pollAccountOAuth(attempt) {
       stopAccountOAuthPolling();
       const accounts = await api.accounts();
       if (attempt !== accountOAuthAttempt) return;
+      if (status.account?.id) accountPanel.select(status.account.id);
       renderAccounts(accounts);
       if (status.account?.email) {
+        showNotice(`已添加 ${status.account.email}`);
         appendLog('ACCOUNT', `已自动保存网页登录账号 ${status.account.email}`, 'tag-proxy');
       }
       window.setTimeout(() => {
@@ -550,8 +490,10 @@ async function completeAccountOAuthFromUrl() {
     if (attempt !== accountOAuthAttempt) return;
     renderAccountOAuthStatus(result);
     if (result.state === 'completed') {
+      if (result.account?.id) accountPanel.select(result.account.id);
       renderAccounts(await api.accounts());
       if (result.account?.email) {
+        showNotice(`已添加 ${result.account.email}`);
         appendLog('ACCOUNT', `已通过回填链接保存网页登录账号 ${result.account.email}`, 'tag-proxy');
       }
       window.setTimeout(() => {
@@ -583,16 +525,22 @@ function showAccountForm(visible) {
   const form = element('accountForm');
   if (!form) return;
   if (!visible) {
+    if (form.style.display === 'none') return;
     cancelAccountOAuth();
     form.style.display = 'none';
+    element('formBackdrop').style.display = 'none';
+    clearAccountForm();
+    element('accountLoginUrlInput').value = '';
+    modalOpener?.focus();
     return;
   }
+  modalOpener = document.activeElement;
+  element('formBackdrop').style.display = 'flex';
+  for (const details of form.querySelectorAll('details')) details.open = false;
   form.style.display = 'block';
   clearAccountForm();
-  if (visible) {
-    element('accountFormError').textContent = '';
-    startAccountOAuth();
-  }
+  element('accountFormClose').focus();
+  startAccountOAuth();
 }
 
 function clearAccountForm() {
@@ -673,6 +621,7 @@ function finishAccountConfirmation(confirmed) {
   accountConfirmResolver = null;
   const modal = element('accountConfirmModal');
   if (modal) modal.style.display = 'none';
+  if (resolver) modalOpener?.focus();
   resolver?.(confirmed);
 }
 
@@ -687,8 +636,9 @@ function requestAccountConfirmation({ title, message, confirmText = '确认', da
   messageNode.textContent = message;
   confirmButton.textContent = confirmText;
   confirmButton.classList.toggle('account-confirm-danger', danger);
+  modalOpener = document.activeElement;
   modal.style.display = 'flex';
-  confirmButton.focus();
+  element('accountConfirmCancel').focus();
   return new Promise(resolve => { accountConfirmResolver = resolve; });
 }
 
@@ -710,7 +660,9 @@ async function saveAccount() {
   errorNode.textContent = '';
   try {
     const result = await api.addAccount(body);
+    accountPanel.select(result.account?.id);
     renderAccounts(result.accounts);
+    showNotice(`已添加 ${body.email}`);
     appendLog('ACCOUNT', `已保存账号 ${body.email}`, 'tag-proxy');
     clearAccountForm();
     showAccountForm(false);
@@ -725,48 +677,62 @@ async function saveAccount() {
 async function importCurrentAccount() {
   const button = element('accountImportBtn');
   if (button?.disabled) return;
+  importPending = true;
   const originalText = button?.textContent || '导入当前登录';
   if (button) {
     button.disabled = true;
     button.textContent = '读取中…';
   }
   try {
-    const result = await api.importCurrentAccount(activeTarget);
+    const result = await api.importCurrentAccount(viewedTarget);
+    accountPanel.select(result.account.id);
     renderAccounts(result.accounts);
+    showNotice(`已导入 ${result.account.email}`);
     const source = result.source ? `（${result.source}）` : '';
     appendLog('ACCOUNT', `已导入当前登录账号 ${result.account.email}${source}`, 'tag-proxy');
   } catch (error) {
     report(error);
   } finally {
+    importPending = false;
     if (button) {
-      button.disabled = false;
       button.textContent = originalText;
+      renderPhase(phase);
     }
   }
 }
 
 async function switchAccount(accountId) {
   const account = accountState.accounts.find(item => item.id === accountId);
-  if (!account) return;
-  const targetName = activeTarget === 'ide' ? 'IDE 版' : '桌面版';
-  const message = clientRunningState || phase !== 'idle'
-    ? `切换到“${accountDisplayName(account)}”会退出当前 ${targetName}，写入新凭据并重新启动。请先保存工作，是否继续？`
-    : `是否将 ${targetName} 切换到“${accountDisplayName(account)}”？`;
+  const target = viewedTarget;
+  if (!account || switching() || switchBlockedReason() || accountState.currentByTarget[target] === accountId) return;
+  const targetName = target === 'ide' ? 'IDE 版' : '桌面版';
+  const original = accountState.accounts.find(item => item.id === accountState.currentByTarget[target]);
+  const source = original ? `从“${accountDisplayName(original)}”` : '';
+  const message = `${targetName}将${source}切换到“${account.email}”。正在运行的客户端将退出，随后使用新账号启动。请先保存工作。`;
   if (!await requestAccountConfirmation({
     title: '确认切换账号',
     message,
-    confirmText: '确认切换'
+    confirmText: '切换并重启'
   })) return;
+  if (target !== viewedTarget || switching() || switchBlockedReason()) return;
+  switchPending = true;
+  switchProgress = { target, accountId, state: 'working', stage: 'checking', revision: switchProgress?.revision || 0 };
+  element('actionNotice').hidden = true;
+  renderPhase(phase);
+  renderAccounts();
   try {
-    const result = await api.switchAccount({ accountId, target: activeTarget });
+    const result = await api.switchAccount({ accountId, target });
+    switchProgress = { ...switchProgress, target, accountId, state: 'done', launched: result.launched };
     renderAccounts(result.accounts);
-    renderStatus(await api.status());
-    appendLog('ACCOUNT', result.launched
-      ? `已切换到 ${account.email}，${targetName}正在重新启动`
-      : `已切换到 ${account.email}，请手动启动 ${targetName}`, 'tag-proxy');
+    showNotice(result.launched ? `已切换到 ${account.email}，${targetName}已启动。` : `已切换到 ${account.email}，请配置客户端路径后启动。`);
   } catch (error) {
+    switchProgress = { ...switchProgress, state: 'failed', error: error.message };
     report(error);
-    renderAccounts((await api.accounts()).accounts);
+  } finally {
+    switchPending = false;
+    renderPhase(phase);
+    renderAccounts();
+    try { renderStatus(await api.status()); } catch (error) { report(error); }
   }
 }
 
@@ -774,6 +740,7 @@ async function refreshAccount(accountId) {
   try {
     const result = await api.refreshAccount(accountId);
     renderAccounts(result.accounts);
+    showNotice(`已刷新 ${result.account.email} 的访问凭据`);
     appendLog('ACCOUNT', `已刷新 ${result.account.email} 的访问凭据`, 'tag-proxy');
   } catch (error) {
     report(error);
@@ -792,68 +759,85 @@ async function deleteAccount(accountId) {
   try {
     const result = await api.deleteAccount(accountId);
     renderAccounts(result.accounts);
+    showNotice(`已删除本地账号 ${account.email}`);
     appendLog('ACCOUNT', `已删除账号 ${account.email}`, 'tag-proxy');
   } catch (error) {
     report(error);
   }
 }
 
-function persistSettings() {
-  if (!validatePortInput(true)) {
-    return Promise.reject(new Error(element('portInputError')?.textContent || '代理端口无效'));
-  }
-  const payload = {
-    port: Number(element('proxyPortInput').value),
-    enableProxy: element('proxyToggle') ? element('proxyToggle').checked : true,
-    enableI18n: element('i18nToggle').checked,
-    enableContextMonitor: element('contextMonitorToggle').checked,
-    targetApp: activeTarget
-  };
+function queueConfiguration(payload) {
   settingsQueue = settingsQueue.catch(() => {}).then(() => api.configure(payload));
   return settingsQueue;
 }
 
+async function persistProxy(target) {
+  const proxyEnabled = element('proxyToggle').checked;
+  if (proxyEnabled && !validatePortInput(true)) {
+    throw new Error(element('portInputError').textContent || '代理端口无效');
+  }
+  const payload = {
+    port: proxyEnabled ? Number(element('proxyPortInput').value) : savedPort,
+    enableProxy: proxyEnabled
+  };
+  if (target) payload.targetApp = target;
+  const result = await queueConfiguration(payload);
+  savedPort = result.settings?.port ?? payload.port;
+  if (!element('proxyToggle').checked || Number(element('proxyPortInput').value) === savedPort) {
+    portDraft = false;
+    element('proxyPortInput').value = String(savedPort);
+    updatePortSelection();
+    validatePortInput();
+  }
+}
+
 async function launch() {
+  if (switching() || launchPending || viewingOtherSession()) return;
   if (phase === 'running') { showProcessModal(); return; }
   if (['preparing', 'launching', 'cleaning'].includes(phase) || cleanupPending) return;
-  const currentObj = currentTargets[activeTarget] || {};
+  const currentObj = currentTargets[viewedTarget] || {};
   if (!currentObj.exists) {
-    pathModalDismissed = false;
     showPathModal(true);
-    report(new Error(`未找到 ${activeTargetName}，请先指定 .exe 路径完成配置`));
     return;
   }
+  const target = viewedTarget;
   launchPending = true;
+  pendingLaunchTarget = target;
+  sessionTarget = target;
   renderPhase('preparing');
   try {
-    await persistSettings();
+    await persistProxy(target);
     renderPhase('launching');
-    await api.launch();
+    await api.launch(target);
     renderPhase('running');
   } catch (error) {
     renderPhase('error');
     report(error);
-    if (error.code === 'PROCESS_CONFLICT') showProcessModal();
-    else if (error.code === 'TARGET_NOT_FOUND') {
-      pathModalDismissed = false;
-      showPathModal(true, `无法启动 ${activeTargetName}`, error.message);
+    if (target === viewedTarget && error.code === 'PROCESS_CONFLICT') showProcessModal();
+    else if (target === viewedTarget && error.code === 'TARGET_NOT_FOUND') {
+      showPathModal(true, `无法启动 ${clientName()}`, error.message);
     }
   }
-  finally { launchPending = false; }
+  finally { launchPending = false; pendingLaunchTarget = null; renderPhase(phase); renderAccounts(); }
 }
 
 function showProcessModal() {
+  restartTarget = viewedTarget;
   showPathModal(false);
-  element('processModalTitle').textContent = `检测到已有 ${activeTargetName} 进程`;
+  modalOpener = document.activeElement;
+  element('processModalTitle').textContent = `重新启动 ${clientName()}？`;
   element('processError').textContent = '';
   element('processModal').style.display = 'flex';
   element('processCancelBtn').focus();
 }
 function dismissProcessModal() {
-  if (!cleanupPending) element('processModal').style.display = 'none';
+  if (!cleanupPending) {
+    element('processModal').style.display = 'none';
+    modalOpener?.focus();
+  }
 }
 async function cleanProcesses() {
-  if (cleanupPending) return;
+  if (cleanupPending || restartTarget !== viewedTarget || viewingOtherSession()) return;
   cleanupPending = true;
   element('processCleanBtn').disabled = true;
   element('processCancelBtn').disabled = true;
@@ -861,7 +845,7 @@ async function cleanProcesses() {
   renderPhase('cleaning');
   try {
     await settingsQueue;
-    await api.cleanAndLaunch();
+    await api.cleanAndLaunch(restartTarget);
     element('processModal').style.display = 'none';
     renderPhase('running');
   } catch (error) {
@@ -909,7 +893,7 @@ function applyTheme(theme, save = false) {
   }
   const btn = element('themeToggleBtn');
   const label = element('themeToggleText');
-  if (label) label.textContent = theme === 'dark' ? '🌙' : '☀️';
+  if (label) label.textContent = theme === 'dark' ? '切换浅色外观' : '切换深色外观';
   if (btn) btn.title = theme === 'dark' ? '当前外观: 深色 (点击切换浅色)' : '当前外观: 浅色 (点击切换深色)';
 }
 
@@ -937,10 +921,9 @@ async function browseTargetExe() {
   const btn = element('browseExeBtn');
   if (btn) btn.disabled = true;
   try {
-    const res = await api.browseExe(activeTarget);
+    const res = await api.browseExe(viewedTarget);
     if (res?.ok && res.path) {
-      appendLog('SYSTEM', `已配置 ${activeTargetName} 路径: ${res.path}`, 'tag-proxy');
-      pathModalDismissed = false;
+      appendLog('SYSTEM', `已配置 ${clientName()} 路径: ${res.path}`, 'tag-proxy');
       showPathModal(false);
       if (res.status) renderStatus(res.status);
     }
@@ -956,19 +939,18 @@ async function saveCustomPath() {
   const input = element('customPathInput');
   const path = input ? input.value.trim() : '';
   if (!path) {
-    showModalError('请输入有效的 .exe 文件路径');
+    showModalError('请输入有效的客户端路径');
     return;
   }
   try {
-    const res = await api.setTargetPath({ target: activeTarget, path });
+    const res = await api.setTargetPath({ target: viewedTarget, path });
     if (res?.ok) {
-      appendLog('SYSTEM', `已保存 ${activeTargetName} 路径: ${res.path}`, 'tag-proxy');
-      pathModalDismissed = false;
+      appendLog('SYSTEM', `已保存 ${clientName()} 路径: ${res.path}`, 'tag-proxy');
       showPathModal(false);
       if (res.status) renderStatus(res.status);
     }
   } catch (err) {
-    report(err);
+    appendLog('SYSTEM', err.message, 'tag-alert');
     showModalError(err.message || '指定的文件路径不存在');
   }
 }
@@ -976,10 +958,9 @@ async function saveCustomPath() {
 // 恢复默认扫描路径
 async function resetDefaultPath() {
   try {
-    const res = await api.setTargetPath({ target: activeTarget, path: '' });
+    const res = await api.setTargetPath({ target: viewedTarget, path: '' });
     if (res?.ok) {
-      appendLog('SYSTEM', `已恢复 ${activeTargetName} 默认检测路径`, 'tag-proxy');
-      pathModalDismissed = false;
+      appendLog('SYSTEM', `已恢复 ${clientName()} 默认检测路径`, 'tag-proxy');
       showPathModal(false);
       const input = element('customPathInput');
       if (input) input.value = '';
@@ -998,42 +979,36 @@ const actions = {
   'toggle-theme': toggleTheme,
   'check-update': checkUpdate,
   'copy-logs': copyLogs,
-  'clear-logs': () => { consoleBox.replaceChildren(); }
+  'clear-logs': () => { consoleBox.replaceChildren(); clearActivity(); }
 };
 
 document.addEventListener('click', event => {
+  const nav = event.target.closest('[data-view]');
+  if (nav) {
+    if (nav.dataset.view === 'accounts') void runAccountAction(() => openView('accounts'));
+    else openView(nav.dataset.view);
+    return;
+  }
   const targetBtn = event.target.closest('[data-target]');
   if (targetBtn && !targetBtn.disabled) {
-    const nextTarget = targetBtn.dataset.target;
-    if (nextTarget && nextTarget !== activeTarget) {
-      activeTarget = nextTarget;
-      activeTargetName = nextTarget === 'ide' ? 'Antigravity IDE' : 'Antigravity';
-      pathModalDismissed = false;
-      showPathModal(false);
-      element('targetHubBtn')?.classList.toggle('active', activeTarget === 'hub');
-      element('targetIdeBtn')?.classList.toggle('active', activeTarget === 'ide');
-      renderTargetsUi(currentTargets, activeTarget);
-      renderPhase(phase, activeTargetName);
-      renderAccounts(accountState);
-      api.configure({ targetApp: nextTarget }).then(res => {
-        if (res?.targetName) activeTargetName = res.targetName;
-        renderPhase(phase, activeTargetName);
-      }).catch(report);
-    }
+    userSelectedTarget = true;
+    viewedTarget = targetBtn.dataset.target;
+    renderPhase(phase);
+    renderAccounts();
     return;
   }
   const control = event.target.closest('[data-action],[data-port]');
   if (!control || control.disabled) return;
   const action = control.dataset.port !== undefined ? async () => {
+    portDraft = true;
     element('proxyPortInput').value = control.dataset.port;
     updatePortSelection();
-    await persistSettings();
+    await persistProxy();
   } : actions[control.dataset.action];
   if (action) Promise.resolve().then(() => action(control)).catch(report);
 });
 
 function dismissPathModal() {
-  pathModalDismissed = true;
   showPathModal(false);
 }
 
@@ -1054,6 +1029,15 @@ element('accountRiskModal')?.addEventListener('click', event => {
 });
 element('accountFormClose')?.addEventListener('click', () => showAccountForm(false));
 element('accountFormCancel')?.addEventListener('click', () => showAccountForm(false));
+element('formBackdrop').addEventListener('click', event => {
+  if (event.target === element('formBackdrop')) showAccountForm(false);
+});
+element('dismissNotice').addEventListener('click', () => { element('actionNotice').hidden = true; });
+element('customPortBtn').addEventListener('click', () => {
+  element('proxyPortInput').focus();
+  element('proxyPortInput').select();
+});
+element('editTargetPath').addEventListener('click', () => showPathModal(true, '设置启动路径'));
 element('accountOpenLink')?.addEventListener('click', openAccountOAuth);
 element('accountCopyLink')?.addEventListener('click', copyAccountOAuth);
 element('accountCallbackFill')?.addEventListener('click', completeAccountOAuthFromUrl);
@@ -1080,24 +1064,30 @@ element('accountConfirmModal')?.addEventListener('click', event => {
 element('pathModal')?.addEventListener('click', event => {
   if (event.target === element('pathModal')) dismissPathModal();
 });
+const dialogDismissals = {
+  accountRiskModal: () => finishAccountRiskAcknowledgment(false),
+  accountConfirmModal: () => finishAccountConfirmation(false),
+  formBackdrop: () => showAccountForm(false),
+  processModal: dismissProcessModal,
+  pathModal: dismissPathModal
+};
+function visibleDialog() {
+  return Object.keys(dialogDismissals).map(element).find(node => node.style.display === 'flex');
+}
 document.addEventListener('keydown', event => {
-  if (accountRiskResolver) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      finishAccountRiskAcknowledgment(false);
-    } else if (event.key === 'Tab') {
-      const controls = [...element('accountRiskModal').querySelectorAll('button:enabled, input:enabled')];
-      const index = controls.indexOf(document.activeElement);
-      event.preventDefault();
-      controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
-    }
-    return;
-  }
+  const dialog = visibleDialog();
+  if (!dialog) return;
   if (event.key === 'Escape') {
-    dismissPathModal();
-    dismissProcessModal();
-    showAccountForm(false);
-    finishAccountConfirmation(false);
+    event.preventDefault();
+    dialogDismissals[dialog.id]();
+  } else if (event.key === 'Tab') {
+    const controls = [...dialog.querySelectorAll('button:enabled, input:enabled, summary')].filter(control => control.getClientRects().length);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (!dialog.contains(document.activeElement) || (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first)?.focus();
+    }
   }
 });
 
@@ -1111,23 +1101,37 @@ element('customPathInput')?.addEventListener('keydown', e => {
   }
 });
 
-element('proxyPortInput').addEventListener('input', event => {
-  event.target.value = event.target.value.replace(/\D/g, '');
+element('proxyPortInput').addEventListener('input', () => {
+  portDraft = true;
   updatePortSelection();
   validatePortInput(false);
 });
-for (const id of ['proxyPortInput', 'proxyToggle', 'i18nToggle', 'contextMonitorToggle', 'enhancementMonitorToggle']) {
-  element(id)?.addEventListener('change', () => {
-    if (id === 'proxyToggle') updateProxyUi(element('proxyToggle').checked);
-    if (id === 'enhancementMonitorToggle') {
-      const enabled = element('enhancementMonitorToggle').checked;
-      element('i18nToggle').checked = enabled;
-      element('contextMonitorToggle').checked = enabled;
-    }
-    updateEnhancementMonitorUi();
-    persistSettings().catch(report);
+for (const id of ['proxyPortInput', 'proxyToggle']) {
+  element(id).addEventListener('change', () => {
+    updateProxyUi(element('proxyToggle').checked);
+    if (!element('proxyToggle').checked || validatePortInput(true)) persistProxy().catch(report);
   });
 }
+function saveEnhancements(keys, enabled) {
+  const patch = Object.fromEntries(keys.map(key => [key, enabled]));
+  Object.assign(enhancements, patch);
+  for (const key of keys) pendingEnhancements.set(key, patch);
+  updateEnhancementMonitorUi();
+  queueConfiguration(patch).catch(async error => {
+    report(error);
+    try {
+      const actual = await api.status();
+      for (const key of keys) if (pendingEnhancements.get(key) === patch) enhancements[key] = actual[key];
+      updateEnhancementMonitorUi();
+    } catch { /* The next status poll reconciles the controls. */ }
+  }).finally(() => {
+    for (const key of keys) if (pendingEnhancements.get(key) === patch) pendingEnhancements.delete(key);
+  });
+}
+for (const [key, id] of Object.entries(enhancementControls)) {
+  element(id).addEventListener('change', event => saveEnhancements([key], event.target.checked));
+}
+element('enhancementMonitorToggle').addEventListener('change', event => saveEnhancements(applicableEnhancements(), event.target.checked));
 
 async function init() {
   applyTheme(currentTheme());
@@ -1136,7 +1140,7 @@ async function init() {
       if (!localStorage.getItem('easyag-theme')) applyTheme(e.matches ? 'dark' : 'light');
     } catch {}
   });
-  loadSettings(await api.status());
+  renderStatus(await api.status());
   for (const item of await api.logs()) appendLog(item.category, item.message, item.cls, item.at);
   stream = new EventSource('/api/events');
   stream.onmessage = event => {

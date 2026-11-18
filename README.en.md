@@ -15,7 +15,7 @@
 
 Antigravity++ is an independent launcher for Antigravity desktop and IDE clients. Manage multiple accounts, import an existing local login, and switch accounts from one panel. Quota rings inside the Antigravity composer show the active model's remaining quota and reset times.
 
-It also provides local proxy configuration, reversible interface localization, and context monitoring. The current version is **0.1.0**.
+It also provides local proxy configuration, reversible interface localization, and context monitoring. The current version is **0.1.1**.
 
 ## Features
 
@@ -40,11 +40,12 @@ The first use of account management displays a risk notice that requires an expl
 - The **context ring** shows the latest request's estimated context usage, with model and generation-speed details.
 - Monitoring reads the local language service without uploading conversations, account information, or access credentials to third parties.
 
-Enable “界面深度汉化与监控” and “AG 内上下文与模型用量” in the launcher, then launch the selected client through Antigravity++. The rings appear inside Antigravity, rather than in the account list.
+Use “AG 内上下文” (context) and “AG 内模型用量” (model quota) on the dashboard or the enhancements page to control each ring independently. Turning one off removes its ring and stops its data collection. The quota ring also works in a new conversation before the first message. On upgrade, both switches inherit your previous monitoring preference.
 
 ### Launching and local proxy
 
 - Supports Antigravity desktop and IDE clients, with automatic installation discovery and custom paths.
+- The checkmark in the client selector shows which version you are viewing. You can browse IDE settings even if the IDE is missing. A notice explains its status, and viewing its settings leaves a running desktop session alone.
 - Connects to your own local proxy on a per-process basis without TUN, with common port presets and custom port input.
 - Clearly displays the selected port and validates the 1–65535 range. Direct connections are also supported.
 - Offers a cleanup and restart action for process conflicts or leftover background processes.
@@ -59,10 +60,10 @@ Enable “界面深度汉化与监控” and “AG 内上下文与模型用量�
 
 ## Account management quick start
 
-1. Select the desktop or IDE client to manage. Use “导入当前登录” to import an existing local login.
-2. To add another account, select “手动添加”, then open or copy the generated link and complete Google authorization. The account is saved automatically after login.
+1. Select the desktop or IDE client in the workspace header, then open “账号管理” in the sidebar. Use “导入当前登录” to import an existing local login.
+2. To add another account, select “添加账号”, then open or copy the generated link and complete Google authorization. The account is saved automatically after login.
 3. If it is not saved automatically, paste the full callback URL from the browser's address bar into the manual completion field and select “回填登录结果”. **Copy the URL shown after a successful login.**
-4. Save your work, select “切换” for the desired account, confirm in the application, and wait for the client to restart.
+4. Select or search for an account on the left and check its email and target client on the right. Save your work, choose “切换并重启”, and confirm. The details pane shows progress or the reason for failure. The current account badge moves when the switch succeeds.
 
 Browser login and token refresh use the launcher's current proxy settings. By default, OAuth client configuration is read from the local Antigravity installation without writing its values to this repository; install the client and verify its path first. Advanced deployments can supply their own OAuth client through `ANTIGRAVITY_OAUTH_CLIENT_ID` and `ANTIGRAVITY_OAUTH_CLIENT_SECRET`.
 
@@ -134,7 +135,7 @@ The update manifest is stored in `update-manifest.json`. By default, it reads ve
 
 GitHub Actions verifies JavaScript modules, runs the full test suite, executes browser regression tests, and builds the Tauri application. A Release with complete application packages and SHA-256 checksums is published only after Windows x64, macOS Apple Silicon, and macOS Intel all succeed. A failure on any platform stops publication.
 
-- A push to `main` publishes a preview such as `v0.1.0-preview.<run-number>`, using the version from `package.json`.
+- A push to `main` publishes a preview such as `v0.1.1-preview.<run-number>`, using the version from `package.json`.
 - A manual workflow run on `main` also builds and publishes a preview.
 - A `v<version>` tag publishes the corresponding version. Versions with suffixes such as `beta` remain prereleases. The tag must match the versions in `package.json`, `package-lock.json`, the Tauri configuration, and Cargo.
 
