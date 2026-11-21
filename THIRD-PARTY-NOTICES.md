@@ -7,6 +7,9 @@ Source: https://github.com/DSDS-CMHL/EasyAntigravity
 The project was originally developed from EasyAntigravity Lite. The original
 MIT copyright notice, Copyright (c) 2026 Astwarp, is retained in [LICENSE](LICENSE).
 
+The long-conversation performance fixes reference EasyAntigravity Lite v4.0.6
+and ddsy2001's contribution in [issue #20](https://github.com/DSDS-CMHL/EasyAntigravity/issues/20).
+
 ## Antigrative Dashboard / AG Pulse
 
 Source: https://github.com/YOU-SHOULD-KNOW-ME/antigrative-dashboard
@@ -16,6 +19,9 @@ Reference commit: 899a7984edbd43cc7a366a67936e80d30c2050cd
 Process/socket parsing and local composer geometry checks in
 `adapters/desktop/language-service-discovery.js` and `features/context-widget.js`
 are adapted from this project. Antigravity++ does not bundle its installer, SDK or plugin runtime.
+
+Language-service discovery for Antigravity Desktop 2.34 references the daemon
+descriptor format documented by the [AGY Context Dashboard community fork](https://github.com/wycocoyu/agy-context-dashboard/releases/tag/v0.9.6).
 
 MIT License
 

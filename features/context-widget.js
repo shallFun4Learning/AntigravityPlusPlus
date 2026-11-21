@@ -348,26 +348,35 @@ function installContextWidget(win, doc, options, report, readConversationId, bin
   }
   function fit() {
     if (!node?.isConnected || !composer) return;
-    node.hidden = false;
-    node.style.display = 'flex';
+    if (node.hidden) {
+      node.hidden = false;
+      node.style.display = 'flex';
+    }
     const r = node.getBoundingClientRect(), row = composer.row.getBoundingClientRect();
     let blocked = r.width + 1 < shadow.getElementById('strip').scrollWidth || r.right > row.right + 1 || r.left < row.left - 1 || !safeLayout(composer);
-    const localControls = new Set(composer.row.parentElement.querySelectorAll('button,input,[role="button"],[role="combobox"]'));
-    const controls = new Set([...localControls, ...doc.querySelectorAll('button,input,[role="button"],[role="combobox"]')]);
-    if (!blocked) for (const control of controls) {
+    const controlSelector = 'button,input,[role="button"],[role="combobox"]';
+    if (!blocked) for (const control of composer.row.parentElement.querySelectorAll(controlSelector)) {
       if (!visible(control)) continue;
       const c = control.getBoundingClientRect();
-      const left = Math.max(r.left, c.left), right = Math.min(r.right, c.right), top = Math.max(r.top, c.top), bottom = Math.min(r.bottom, c.bottom);
-      const overlap = right - left > 1 && bottom - top > 1;
-      if (localControls.has(control)) {
-        if ((control.clientWidth > 0 && control.scrollWidth > control.clientWidth + 1) || overlap) { blocked = true; break; }
-      } else if (overlap && typeof doc.elementFromPoint === 'function') {
-        const hit = doc.elementFromPoint((left + right) / 2, (top + bottom) / 2);
-        if (hit === control || control.contains(hit)) { blocked = true; break; }
+      const overlap = Math.min(r.right, c.right) - Math.max(r.left, c.left) > 1
+        && Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top) > 1;
+      if ((control.clientWidth > 0 && control.scrollWidth > control.clientWidth + 1) || overlap) {
+        blocked = true;
+        break;
       }
     }
-    node.hidden = blocked;
-    node.style.display = blocked ? 'none' : 'flex';
+    if (!blocked && r.width > 4 && typeof doc.elementFromPoint === 'function') {
+      const middleY = (r.top + r.bottom) / 2;
+      for (const point of [r.left + 2, (r.left + r.right) / 2, r.right - 2]) {
+        const hit = doc.elementFromPoint(point, middleY);
+        if (!hit || hit === node || node.contains(hit)) continue;
+        if (hit.closest?.(controlSelector)) { blocked = true; break; }
+      }
+    }
+    if (node.hidden !== blocked) {
+      node.hidden = blocked;
+      node.style.display = blocked ? 'none' : 'flex';
+    }
     if (blocked) hideCards();
   }
   function syncTheme() {
@@ -518,7 +527,13 @@ function installContextWidget(win, doc, options, report, readConversationId, bin
   doc.addEventListener('scroll', schedule, true);
   win.addEventListener('resize', schedule);
   observer = new win.MutationObserver(records => {
-    if (records.some(record => record.target !== node && !node?.contains(record.target))) schedule();
+    const stableComposer = node?.isConnected && composer?.row.isConnected && composer?.editor.isConnected;
+    if (records.some(({ target }) => {
+      if (target === node || node?.contains(target)) return false;
+      const element = target.nodeType === 1 ? target : target.parentElement;
+      return !stableComposer || composer.row.parentElement.contains(element)
+        || !element?.closest?.('[data-testid*="message-content"],pre,code');
+    })) schedule();
   });
   observer.observe(doc.documentElement, { childList: true, subtree: true });
   const timer = win.setInterval(() => { mount(); refresh(); }, 1000);

@@ -15,7 +15,7 @@
 
 Antigravity++ 是面向 Antigravity 桌面端与 IDE 的独立启动器。通过一个面板管理多个账号、导入现有登录状态并切换账号；在 Antigravity 输入区通过额度圆环查看当前模型的剩余额度和重置时间。
 
-同时提供本地代理配置、可逆界面汉化和上下文监控。当前版本为 **0.1.1**。
+同时提供本地代理配置、可逆界面汉化和上下文监控。当前版本为 **0.1.2**。
 
 ## 主要功能
 
@@ -135,7 +135,7 @@ Intel macOS 使用 `x86_64-apple-darwin`，Windows 使用 `x86_64-pc-windows-msv
 
 构建与发布由 GitHub Actions 完成，流程会执行 JavaScript 检查、完整测试、浏览器回归测试和 Tauri 多平台构建。Windows x64、macOS Apple Silicon、macOS Intel 三个平台全部成功后，才会创建 Release 并附上完整应用包和 SHA-256 校验和；任何一个平台失败都会停止发布。
 
-- 推送到 `main`：自动发布 `v0.1.1-preview.<构建序号>` 形式的预览版，版本前缀取自当前 `package.json`。
+- 推送到 `main`：自动发布 `v0.1.2-preview.<构建序号>` 形式的预览版，版本前缀取自当前 `package.json`。
 - 在 `main` 上手动运行工作流：同样构建并发布一个预览版。
 - 推送 `v<版本号>` 标签：自动发布对应版本；带 `beta` 等后缀的版本仍标为预览版。标签必须与 `package.json`、`package-lock.json`、Tauri 配置和 Cargo 中的版本一致。
 

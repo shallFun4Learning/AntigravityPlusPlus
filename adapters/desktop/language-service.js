@@ -1,6 +1,6 @@
 const fs = require('node:fs/promises');
 const http = require('node:http');
-const { discoverProcesses, serverFromDiscovery, logPaths } = require('./language-service-discovery');
+const { discoverProcesses, serverFromDiscovery, serverFromDaemon, logPaths } = require('./language-service-discovery');
 
 const METHODS = new Set([
   'GetUserStatus',
@@ -9,6 +9,7 @@ const METHODS = new Set([
   'GetCascadeTrajectoryGeneratorMetadata'
 ]);
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UNSUPPORTED_RPC = new Set([404, 405, 501]);
 
 function csrfFromCommand(command) {
   return command?.match(/--csrf_token(?:=|\s+)"?([^\s"]+)/)?.[1];
@@ -30,8 +31,9 @@ async function readLogTail(file) {
 
 // Only explicitly allowed read RPCs. No raw service data is returned to a renderer.
 class LanguageService {
-  constructor({ profile, target = 'hub', parentPid, processes = discoverProcesses, readLog = readLogTail, transport = http.request } = {}) {
-    Object.assign(this, { profile, target, parentPid, processes, readLog, transport });
+  constructor({ profile, target = 'hub', parentPid, processes = discoverProcesses, readLog = readLogTail,
+    readDaemon = serverFromDaemon, transport = http.request } = {}) {
+    Object.assign(this, { profile, target, parentPid, processes, readLog, readDaemon, transport });
     this.requests = new Set();
     this.generation = 0;
   }
@@ -64,10 +66,10 @@ class LanguageService {
         const csrf = csrfFromCommand(row.command);
         const candidates = csrf ? await this.probeReadOnlyServers(row, csrf, row.ports, generation) : [];
         if (candidates.length === 1) server = candidates[0];
-      } else {
-        if (rows.length === 1) {
-          const row = rows[0];
-          const csrf = csrfFromCommand(row.command);
+      } else if (rows.length === 1) {
+        const row = rows[0];
+        const csrf = csrfFromCommand(row.command);
+        if (csrf) {
           const hintedPorts = [];
           for (const file of logPaths(this.profile)) {
             try {
@@ -75,9 +77,12 @@ class LanguageService {
               hintedPorts.push(hinted.port);
             } catch { /* Logs are only a hint; port probing below remains authoritative. */ }
           }
-          if (csrf) {
-            const candidates = await this.probeReadOnlyServers(row, csrf, [...hintedPorts, ...row.ports], generation);
-            if (candidates.length === 1) server = candidates[0];
+          const candidates = await this.probeReadOnlyServers(row, csrf, [...hintedPorts, ...row.ports], generation);
+          if (candidates.length === 1) server = candidates[0];
+        } else {
+          const daemon = await this.readDaemon(row);
+          if (daemon?.pid === row.pid && row.ports.has(daemon.port)) {
+            [server] = await this.probeReadOnlyServers(row, daemon.csrf, [daemon.port], generation);
           }
         }
       }
@@ -99,7 +104,7 @@ class LanguageService {
     try {
       return await this.request(server, method, body, signal);
     } catch (error) {
-      if (generation === this.generation) this.server = null;
+      if (generation === this.generation && !UNSUPPORTED_RPC.has(error?.statusCode)) this.server = null;
       throw error;
     }
   }
@@ -123,7 +128,14 @@ class LanguageService {
         response.on('error', () => reject(new Error('统计连接中断')));
         response.on('aborted', () => reject(new Error('统计连接中断')));
         response.on('end', () => {
-          if (response.statusCode !== 200) return reject(new Error('当前 AG 统计接口不可用'));
+          if (response.statusCode !== 200) {
+            const error = Object.assign(new Error('当前 AG 统计接口不可用'), { statusCode: response.statusCode });
+            if (response.statusCode === 404 && response.headers['content-type']?.startsWith('application/json')) {
+              try { error.connectNotFound = JSON.parse(Buffer.concat(chunks).toString('utf8'))?.code === 'not_found'; }
+              catch {}
+            }
+            return reject(error);
+          }
           try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
           catch { reject(new Error('AG 统计数据无法解析')); }
         });
@@ -138,6 +150,39 @@ class LanguageService {
 
   async metadata(id, signal) {
     if (!GUID.test(id)) throw new Error('无效的对话 ID');
+    const items = [];
+    let total = null;
+    for (let pageIndex = 0; pageIndex < 64; pageIndex++) {
+      let page;
+      try {
+        page = await this.call('GetCascadeTrajectoryGeneratorMetadata', {
+          cascadeId: id, generatorMetadataOffset: items.length
+        }, signal);
+      } catch (error) {
+        if (pageIndex === 0 && UNSUPPORTED_RPC.has(error?.statusCode) && !error.connectNotFound) {
+          return this.legacyMetadata(id, signal);
+        }
+        throw error;
+      }
+      if (!page || typeof page !== 'object' || Array.isArray(page)) throw new Error('统计分页不完整');
+      const pageId = page.cascadeId ?? page.trajectory?.cascadeId;
+      if (pageId != null && (typeof pageId !== 'string' || pageId.toLowerCase() !== id.toLowerCase())) {
+        throw new Error('对话统计不匹配');
+      }
+      if (page.numTotalGeneratorMetadata != null) total = Number(page.numTotalGeneratorMetadata);
+      if (total !== null && (!Number.isSafeInteger(total) || total < items.length || total > 10000)) {
+        throw new Error('统计样本范围不支持');
+      }
+      const entries = page.generatorMetadata ?? page.generatorMetadatas ?? [];
+      if (!Array.isArray(entries) || items.length + entries.length > (total ?? 10000)) throw new Error('统计分页不完整');
+      items.push(...entries);
+      if (items.length === total || (!entries.length && total === null)) return items;
+      if (!entries.length) throw new Error('统计分页不完整');
+    }
+    throw new Error('统计分页超过上限');
+  }
+
+  async legacyMetadata(id, signal) {
     let first = await this.call('GetCascadeTrajectory', { cascadeId: id, trajectoryVerbosity: 2 }, signal);
     if (first.trajectory?.cascadeId?.toLowerCase() !== id.toLowerCase()) throw new Error('对话统计不匹配');
     const items = first.trajectory.generatorMetadata || [];

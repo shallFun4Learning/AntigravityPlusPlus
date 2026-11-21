@@ -35,7 +35,10 @@ const document = {
     return { nextNode() { index++; return index < nodes.length; }, get currentNode() { return nodes[index]; } };
   }
 };
-const window = { MutationObserver: Observer, NodeFilter: { SHOW_TEXT: 4 } };
+const timers = new Set();
+const window = { MutationObserver: Observer, NodeFilter: { SHOW_TEXT: 4 },
+  setTimeout(callback) { timers.add(callback); return callback; },
+  clearTimeout(callback) { timers.delete(callback); } };
 
 for (let index = 0; index < 5; index++) {
   installI18n(window, document, dictionary, true);
@@ -80,6 +83,29 @@ assert.equal(dynamicNodes[0].nodeValue, '你已使用部分 5 小时额度，将
 window.__easyagI18n.dispose();
 assert.equal(dynamicNodes[0].nodeValue, 'You have used some of your 5-hour limit, it will fully refresh in 3 hours, 4 minutes.');
 assert.equal(dynamicNodes[1].nodeValue, '2 active conversations');
+
+installI18n(window, document, dictionary, true);
+const branch = new Element({}, true);
+branch.querySelectorAll = () => { throw new Error('An ignored subtree should never be scanned'); };
+const observer = callbacks.at(-1);
+observer.callback([{ type: 'childList', addedNodes: [branch], removedNodes: [] }]);
+assert.equal(timers.size, 0);
+const removed = text('About', body);
+observer.callback([{ type: 'characterData', target: removed }]);
+assert.equal(removed.nodeValue, '关于');
+removed.isConnected = false;
+const removal = [{ type: 'childList', addedNodes: [], removedNodes: [removed] }];
+observer.callback(removal);
+observer.callback(removal);
+assert.equal(timers.size, 1, 'Removal batches share one cleanup');
+const cleanup = [...timers][0];
+timers.delete(cleanup);
+cleanup();
+observer.callback(removal);
+window.__easyagI18n.dispose();
+assert.equal(removed.nodeValue, '关于', 'Disconnected translations have been released');
+assert.equal(timers.size, 0, 'Disposal cancels pending cleanup');
+
 const { rendererSource, disposeSource } = require('../adapters/desktop/renderer');
 const mounts = [];
 const frameWindow = { MutationObserver: Observer, NodeFilter: { SHOW_TEXT: 4 } };

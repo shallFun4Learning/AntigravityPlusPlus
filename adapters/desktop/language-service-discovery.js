@@ -2,6 +2,7 @@
 // Copyright (c) 2026 AG Pulse contributors. See THIRD-PARTY-NOTICES.md.
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const { constants } = require('node:fs');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
@@ -123,6 +124,39 @@ function serverFromDiscovery(log, rows) {
   return { pid: row.pid, port, csrf };
 }
 
+async function readDaemonDescriptor(file) {
+  let handle;
+  try {
+    handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const stat = await handle.stat();
+    const uid = process.getuid?.();
+    if (!stat.isFile() || stat.size > 4096 || (uid !== undefined && (stat.uid !== uid || (stat.mode & 0o077)))) return null;
+    const { buffer, bytesRead } = await handle.read(Buffer.alloc(4097), 0, 4097, 0);
+    return bytesRead <= 4096 ? JSON.parse(buffer.toString('utf8', 0, bytesRead)) : null;
+  } catch {
+    return null;
+  } finally {
+    await handle?.close();
+  }
+}
+
+async function serverFromDaemon(row, home = os.homedir()) {
+  const option = row.command?.match(/(?:^|\s)--app_data_dir(?:=|\s+)(?:"([^"]+)"|([^\s"]+))/);
+  const appDataDir = option?.[1] ?? option?.[2] ?? 'antigravity';
+  if (!/^[a-z0-9][a-z0-9_.-]{0,63}$/i.test(appDataDir)) return null;
+  const directory = path.join(home, '.gemini', appDataDir, 'daemon');
+  let server = null;
+  for (const port of [...row.ports].slice(0, 16)) {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
+    const descriptor = await readDaemonDescriptor(path.join(directory, `hub_${port}.json`));
+    if (!descriptor || descriptor.pid !== row.pid || descriptor.httpPort !== port
+      || typeof descriptor.csrfToken !== 'string' || !/^[\x21-\x7e]{1,512}$/.test(descriptor.csrfToken)) continue;
+    if (server) return null;
+    server = { pid: row.pid, port, csrf: descriptor.csrfToken };
+  }
+  return server;
+}
+
 function logPaths(profile) {
   return [...new Set([
     ...(process.platform === 'darwin' ? [path.join(os.homedir(), 'Library/Logs/Antigravity/language_server.log')] : []),
@@ -130,4 +164,4 @@ function logPaths(profile) {
   ])];
 }
 
-module.exports = { discoverProcesses, serverFromDiscovery, logPaths, parsePs, parseIdePs, ideProcess, parseNetstat, parseLsof };
+module.exports = { discoverProcesses, serverFromDiscovery, serverFromDaemon, logPaths, parsePs, parseIdePs, ideProcess, parseNetstat, parseLsof };

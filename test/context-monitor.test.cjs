@@ -1,10 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
 const { once } = require('node:events');
 const { ContextMonitor, summarizeMetadata, resolveEndpointModel, seconds } = require('../features/context-monitor');
+const { QuotaMonitor } = require('../features/quota-monitor');
 const { LanguageService } = require('../adapters/desktop/language-service');
-const { serverFromDiscovery, parseNetstat, parsePs, parseLsof } = require('../adapters/desktop/language-service-discovery');
+const { serverFromDiscovery, serverFromDaemon, parseNetstat, parsePs, parseLsof } = require('../adapters/desktop/language-service-discovery');
 const { CdpHub } = require('../adapters/desktop/cdp');
 const { normalizeSettings, assertLaunchSettingsMutable } = require('../core/settings');
 
@@ -98,21 +102,116 @@ test('desktop discovery probes PID-owned ports when the startup log is truncated
   assert.equal(received[0].token, 'private');
 });
 
-test('metadata pagination is complete, bounded and conversation-specific; no steps are returned', async () => {
+test('desktop 2.34 discovers the same verified backend for both monitors without the old argument', async t => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'easyag-daemon-'));
+  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  const responses = {
+    GetUserStatus: { userStatus: { email: 'account@example.test' } },
+    GetCascadeTrajectoryGeneratorMetadata: { numTotalGeneratorMetadata: 1, generatorMetadata: [chat()] },
+    RetrieveUserQuotaSummary: { groups: [{ displayName: 'Gemini Models', buckets: [{ remainingFraction: .73 }] }] }
+  };
+  const calls = [];
+  const server = http.createServer((request, response) => {
+    const method = request.url.split('/').at(-1);
+    calls.push(method);
+    if (request.headers['x-codeium-csrf-token'] !== 'fixture-token' || !Object.hasOwn(responses, method)) {
+      response.writeHead(403).end();
+      return;
+    }
+    response.end(JSON.stringify(responses[method]));
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+
+  const port = server.address().port;
+  const row = { pid: 17, command: 'language_server --standalone --app_data_dir=antigravity-test', ports: new Set([port]) };
+  const directory = path.join(home, '.gemini', 'antigravity-test', 'daemon');
+  const descriptor = path.join(directory, `hub_${port}.json`);
+  await fs.mkdir(directory, { recursive: true });
+  await fs.writeFile(descriptor, JSON.stringify({ pid: 18, httpPort: port, csrfToken: 'fixture-token' }), { mode: 0o600 });
+  assert.equal(await serverFromDaemon(row, home), null, 'An old daemon PID must not be accepted');
+  await fs.writeFile(descriptor, JSON.stringify({ pid: 17, httpPort: port === 65535 ? 65534 : port + 1, csrfToken: 'fixture-token' }));
+  assert.equal(await serverFromDaemon(row, home), null, 'The descriptor must match the PID-owned port');
+  await fs.writeFile(descriptor, JSON.stringify({ pid: 17, httpPort: port, csrfToken: 'fixture-token' }));
+  if (process.getuid) {
+    await fs.chmod(descriptor, 0o644);
+    assert.equal(await serverFromDaemon(row, home), null, 'Shared credentials are ignored');
+    await fs.chmod(descriptor, 0o600);
+  }
+  const client = new LanguageService({
+    processes: async () => [row],
+    readDaemon: candidate => serverFromDaemon(candidate, home)
+  });
+  const [context, quota] = await Promise.all([new ContextMonitor(client).sample(id), new QuotaMonitor(client).sample()]);
+  assert.equal(context.state, 'live');
+  assert.equal(context.context.usedTokens, 40);
+  assert.equal(quota.state, 'live');
+  assert.equal(quota.groups[0].buckets[0].remainingFraction, .73);
+  assert.equal(calls.filter(method => method === 'GetCascadeTrajectoryGeneratorMetadata').length, 1);
+  assert.equal(calls.includes('GetCascadeTrajectory'), false);
+});
+
+test('metadata reads bounded pages directly without requesting a trajectory', async () => {
   const client = new LanguageService();
   const calls = [];
   client.call = async (method, body) => {
     calls.push([method, body]);
-    return method === 'GetCascadeTrajectory'
-      ? { trajectory: { cascadeId: id, steps: ['private body'], generatorMetadata: [chat()] }, numTotalGeneratorMetadata: 2 }
-      : { generatorMetadata: [chat(20)] };
+    return { cascadeId: id, numTotalGeneratorMetadata: 2, generatorMetadata: [chat(40 - body.generatorMetadataOffset * 20)] };
   };
-  assert.equal((await client.metadata(id)).length, 2);
-  assert.deepEqual(calls[1][1], { cascadeId: id, generatorMetadataOffset: 1 });
+  assert.deepEqual(await client.metadata(id), [chat(), chat(20)]);
+  assert.deepEqual(calls, [0, 1].map(generatorMetadataOffset => [
+    'GetCascadeTrajectoryGeneratorMetadata', { cascadeId: id, generatorMetadataOffset }
+  ]));
   await assert.rejects(client.metadata(otherId), /不匹配/);
-  client.call = async method => method === 'GetCascadeTrajectory'
-    ? { trajectory: { cascadeId: id, generatorMetadata: [] }, numTotalGeneratorMetadata: 2 } : { generatorMetadata: [] };
+
+  client.call = async (_, body) => ({ generatorMetadatas: body.generatorMetadataOffset === 0 ? [chat()] : [] });
+  assert.deepEqual(await client.metadata(id), [chat()], 'Pages without a count end at the first empty page');
+  client.call = async () => ({ numTotalGeneratorMetadata: 2, generatorMetadata: [] });
   await assert.rejects(client.metadata(id), /分页/);
+  client.call = async () => ({ numTotalGeneratorMetadata: 10001, generatorMetadata: [] });
+  await assert.rejects(client.metadata(id), /范围/);
+});
+
+test('only an unsupported first metadata request falls back to the legacy trajectory', async () => {
+  const client = new LanguageService();
+  for (const statusCode of [404, 405, 501]) {
+    const calls = [];
+    client.call = async (method, body) => {
+      calls.push(method);
+      if (method === 'GetCascadeTrajectory') {
+        return { trajectory: { cascadeId: id, steps: ['private body'], generatorMetadata: [chat()] }, numTotalGeneratorMetadata: 2 };
+      }
+      if (body.generatorMetadataOffset === 0) throw Object.assign(new Error('Unsupported'), { statusCode });
+      return { generatorMetadata: [chat(20)] };
+    };
+    assert.deepEqual(await client.metadata(id), [chat(), chat(20)]);
+    assert.deepEqual(calls, ['GetCascadeTrajectoryGeneratorMetadata', 'GetCascadeTrajectory', 'GetCascadeTrajectoryGeneratorMetadata']);
+  }
+  for (const [statusCode, offset] of [[403, 0], [500, 0], [404, 1]]) {
+    const error = Object.assign(new Error('Metadata read failed'), { statusCode });
+    client.call = async (method, body) => {
+      assert.equal(method, 'GetCascadeTrajectoryGeneratorMetadata');
+      if (body.generatorMetadataOffset === offset) throw error;
+      return { numTotalGeneratorMetadata: 2, generatorMetadata: [chat()] };
+    };
+    await assert.rejects(client.metadata(id), error);
+  }
+});
+
+test('an HTTP 404 for a missing conversation ends metadata collection', async t => {
+  const calls = [];
+  const server = http.createServer((request, response) => {
+    calls.push(request.url.split('/').at(-1));
+    response.writeHead(404, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ code: 'not_found' }));
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const client = new LanguageService({ processes: async () => [] });
+  client.server = { pid: 9, port: server.address().port, csrf: 'fixture-token' };
+  client.discoveredAt = Date.now();
+  await assert.rejects(client.metadata(id), { statusCode: 404, connectNotFound: true });
+  assert.deepEqual(calls, ['GetCascadeTrajectoryGeneratorMetadata']);
 });
 
 function mockClient() {

@@ -100,6 +100,35 @@ const allText = node => [
   ...(node?.children || []).map(allText)
 ].join('');
 
+test('layout skips document-wide control scans and ignores message-only changes', () => {
+  const f = fixture();
+  const querySelectorAll = f.doc.querySelectorAll;
+  f.doc.querySelectorAll = selector => {
+    assert.doesNotMatch(selector, /^button,input/, 'Old conversation controls must not be scanned');
+    return querySelectorAll(selector);
+  };
+  let mutate;
+  f.win.MutationObserver = class {
+    constructor(callback) { mutate = callback; }
+    observe() {}
+    disconnect() {}
+  };
+  const message = { nodeType: 1, closest: () => message };
+  f.install();
+  mutate([{ target: message }]);
+  assert.equal(f.frames.size, 0);
+  mutate([{ target: f.row }]);
+  assert.equal(f.frames.size, 1);
+  const overlay = { closest: () => overlay };
+  f.doc.elementFromPoint = () => overlay;
+  f.tick();
+  assert.equal(f.node.hidden, true, 'Floating native controls still take priority');
+  f.doc.elementFromPoint = () => f.node;
+  f.tick();
+  assert.equal(f.node.hidden, false);
+  f.win.__easyagContext.dispose();
+});
+
 test('widget has a compact context marker; speed appears only in closable details', () => {
   const f = fixture(); f.install();
   assert.deepEqual(f.sent.map(request => request.type), ['context-metrics', 'quota-metrics']);
