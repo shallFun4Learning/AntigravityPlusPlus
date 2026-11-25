@@ -36,6 +36,7 @@ class LanguageService {
     Object.assign(this, { profile, target, parentPid, processes, readLog, readDaemon, transport });
     this.requests = new Set();
     this.generation = 0;
+    this.supportsIncrementalMetadata = true;
   }
 
   async probeReadOnlyServers(row, csrf, ports, generation) {
@@ -148,18 +149,20 @@ class LanguageService {
     });
   }
 
-  async metadata(id, signal) {
+  async metadata(id, signal, { offset = 0 } = {}) {
     if (!GUID.test(id)) throw new Error('无效的对话 ID');
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10000) throw new Error('统计样本范围不支持');
     const items = [];
     let total = null;
+    let cursor = offset;
     for (let pageIndex = 0; pageIndex < 64; pageIndex++) {
       let page;
       try {
         page = await this.call('GetCascadeTrajectoryGeneratorMetadata', {
-          cascadeId: id, generatorMetadataOffset: items.length
+          cascadeId: id, generatorMetadataOffset: cursor
         }, signal);
       } catch (error) {
-        if (pageIndex === 0 && UNSUPPORTED_RPC.has(error?.statusCode) && !error.connectNotFound) {
+        if (pageIndex === 0 && offset === 0 && UNSUPPORTED_RPC.has(error?.statusCode) && !error.connectNotFound) {
           return this.legacyMetadata(id, signal);
         }
         throw error;
@@ -170,13 +173,17 @@ class LanguageService {
         throw new Error('对话统计不匹配');
       }
       if (page.numTotalGeneratorMetadata != null) total = Number(page.numTotalGeneratorMetadata);
-      if (total !== null && (!Number.isSafeInteger(total) || total < items.length || total > 10000)) {
+      if (total !== null && (!Number.isSafeInteger(total) || total < 0 || total > 10000)) {
         throw new Error('统计样本范围不支持');
       }
+      if (total !== null && total < offset) return { items: [], truncated: true, total };
       const entries = page.generatorMetadata ?? page.generatorMetadatas ?? [];
-      if (!Array.isArray(entries) || items.length + entries.length > (total ?? 10000)) throw new Error('统计分页不完整');
+      if (!Array.isArray(entries) || cursor + entries.length > (total ?? 10000)) throw new Error('统计分页不完整');
       items.push(...entries);
-      if (items.length === total || (!entries.length && total === null)) return items;
+      cursor += entries.length;
+      if (cursor === total || (!entries.length && total === null)) {
+        return offset > 0 ? { items, truncated: false, total } : items;
+      }
       if (!entries.length) throw new Error('统计分页不完整');
     }
     throw new Error('统计分页超过上限');

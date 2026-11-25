@@ -1,6 +1,6 @@
 {
   "edition": "plusplus",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "dictVersion": "2026-11-17-hotfix1",
   "dicts": {
     "ui_v2.json": {
@@ -13,7 +13,7 @@
     }
   },
   "runtime": {
-    "version": "0.1.2",
+    "version": "0.1.3",
     "files": {
       "server.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/server.js",
@@ -21,7 +21,7 @@
       },
       "index.html": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/index.html",
-        "sha256": "fb36e50f78164476a25ede43f7129041badf60b8641f07b100429b4760c5fd89"
+        "sha256": "712790099a01ce5c680f3277d2fd81e99232ededba2551e89d037b0478771ae0"
       },
       "core/events.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/core/events.js",
@@ -57,7 +57,7 @@
       },
       "features/context-monitor.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/features/context-monitor.js",
-        "sha256": "81d2320605511545e17321aee3c398ea873dcf045428b8df5e25ac04490940c6"
+        "sha256": "f3decfe65791a8fdbf98131fdd70732bb19ae8fd40b494c53eb55e87c72ddf74"
       },
       "features/quota-monitor.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/features/quota-monitor.js",
@@ -113,7 +113,7 @@
       },
       "adapters/desktop/language-service.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/adapters/desktop/language-service.js",
-        "sha256": "dab05acefc77500c914023750fb0ed688a037f23a4de7f6730e49860e8a25eee"
+        "sha256": "89e70856edf77a9d6c1f3372c83b2e868922b654925dc8a38df6e2f246db6fb8"
       },
       "adapters/desktop/language-service-discovery.js": {
         "url": "https://raw.githubusercontent.com/shallFun4Learning/AntigravityPlusPlus/main/adapters/desktop/language-service-discovery.js",

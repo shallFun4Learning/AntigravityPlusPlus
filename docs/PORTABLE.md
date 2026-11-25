@@ -1,4 +1,4 @@
-# Antigravity++ 0.1.2 便携版
+# Antigravity++ 0.1.3 便携版
 
 完整应用包从 [GitHub Releases](https://github.com/shallFun4Learning/AntigravityPlusPlus/releases) 下载，按系统与处理器选择对应 ZIP。主线自动构建会标记为预览版；每次发布附带 `SHA256SUMS.txt`，可校验下载文件完整性。
 

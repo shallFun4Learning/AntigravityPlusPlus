@@ -162,6 +162,15 @@ test('metadata reads bounded pages directly without requesting a trajectory', as
   assert.deepEqual(calls, [0, 1].map(generatorMetadataOffset => [
     'GetCascadeTrajectoryGeneratorMetadata', { cascadeId: id, generatorMetadataOffset }
   ]));
+  client.call = async (_, body) => ({
+    cascadeId: id,
+    numTotalGeneratorMetadata: 2,
+    generatorMetadata: body.generatorMetadataOffset < 2 ? [chat()] : []
+  });
+  assert.deepEqual(await client.metadata(id, undefined, { offset: 2 }),
+    { items: [], truncated: false, total: 2 });
+  assert.deepEqual(await client.metadata(id, undefined, { offset: 5 }),
+    { items: [], truncated: true, total: 2 });
   await assert.rejects(client.metadata(otherId), /不匹配/);
 
   client.call = async (_, body) => ({ generatorMetadatas: body.generatorMetadataOffset === 0 ? [chat()] : [] });
@@ -212,6 +221,46 @@ test('an HTTP 404 for a missing conversation ends metadata collection', async t 
   client.discoveredAt = Date.now();
   await assert.rejects(client.metadata(id), { statusCode: 404, connectNotFound: true });
   assert.deepEqual(calls, ['GetCascadeTrajectoryGeneratorMetadata']);
+});
+
+test('incremental context monitoring refreshes only the trailing metadata and strips private fields from cache', async () => {
+  const server = { pid: 9, port: 4001, csrf: 'secret' };
+  const all = [chat(30, 100), chat(45, 100)];
+  const offsets = [];
+  const client = new LanguageService({
+    profile: 'unused',
+    processes: async () => [],
+    readLog: async () => ''
+  });
+  client.discover = async () => server;
+  client.call = async (method, body) => {
+    if (method === 'GetUserStatus') return { userStatus: { email: 'account@example.test' } };
+    offsets.push(body.generatorMetadataOffset);
+    return {
+      cascadeId: id,
+      numTotalGeneratorMetadata: all.length,
+      generatorMetadata: all.slice(body.generatorMetadataOffset)
+    };
+  };
+  const monitor = new ContextMonitor(client);
+
+  assert.equal((await monitor.sample(id)).context.usedTokens, 45);
+  assert.deepEqual(offsets, [0]);
+  assert.equal((await monitor.sample(id)).context.usedTokens, 45);
+  assert.deepEqual(offsets, [0, 1]);
+
+  all[1] = chat(55, 100);
+  assert.equal((await monitor.sample(id)).context.usedTokens, 55);
+  all.push(chat(70, 100));
+  assert.equal((await monitor.sample(id)).context.usedTokens, 70);
+  assert.deepEqual(offsets, [0, 1, 1, 1]);
+
+  all.splice(1);
+  assert.equal((await monitor.sample(id)).context.usedTokens, 30);
+  all[0] = chat(15, 100);
+  monitor.cache.get(id).syncedAt = 0;
+  assert.equal((await monitor.sample(id)).context.usedTokens, 15);
+  assert.doesNotMatch(JSON.stringify([...monitor.cache.values()]), /private text|tokenBreakdown/);
 });
 
 function mockClient() {
