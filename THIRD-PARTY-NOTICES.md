@@ -53,7 +53,8 @@ The multi-account feature design and client-credential compatibility research
 in AntigravityPlusPlus reference this project. The account store, switch
 workflow, credential adapter, and launcher UI were independently implemented
 for AntigravityPlusPlus and do not bundle source files or assets from
-Antigravity-Manager.
+Antigravity-Manager. The `am-v0.0.2` `state.vscdb` authentication-state
+compatibility behavior is referenced only for the host format update.
 
 The upstream Antigravity-Manager project is distributed under the
 [CC BY-NC-SA 4.0 License](https://github.com/lbjlaq/Antigravity-Manager/blob/main/LICENSE).

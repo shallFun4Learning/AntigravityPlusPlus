@@ -208,6 +208,15 @@ function createUnifiedTopicEntry(sentinelKey, payload) {
   return encodeLengthField(1, entry);
 }
 
+function createUnifiedRawTopicEntry(sentinelKey, payload) {
+  const row = encodeLengthField(1, payload);
+  const entry = Buffer.concat([
+    encodeStringField(1, sentinelKey),
+    encodeLengthField(2, row)
+  ]);
+  return encodeLengthField(1, entry);
+}
+
 function readLengthField(data, offset) {
   const length = readVarint(data, offset);
   const end = length.offset + Number(length.value);
@@ -290,6 +299,39 @@ function createStringValuePayload(value) {
   return encodeStringField(3, value);
 }
 
+function createAuthStatePayload(account, secrets) {
+  const project = text(account.projectId) || 'aicode-consumers';
+  return Buffer.from(JSON.stringify({
+    state: 'signedIn',
+    context: {
+      project,
+      showProjectError: false,
+      errorMessage: '',
+      ineligibleMessage: ''
+    },
+    token: {
+      accessToken: text(secrets.accessToken),
+      refreshToken: text(secrets.refreshToken),
+      expiry: expirySeconds(account.tokenExpiresAt) * 1000
+    }
+  }));
+}
+
+function createCloudcodeUserState(account) {
+  return JSON.stringify({
+    state: 'signedIn',
+    context: {
+      project: text(account.projectId),
+      showProjectError: false,
+      errorMessage: ''
+    },
+    user: {
+      email: text(account.email),
+      name: text(account.email)
+    }
+  });
+}
+
 function decodeUnifiedStateTopic(encoded) {
   if (!encoded) return Buffer.alloc(0);
   const decoded = Buffer.from(encoded, 'base64');
@@ -318,6 +360,25 @@ function decodeUnifiedTopicPayload(encoded, targetKey) {
   return null;
 }
 
+function decodeUnifiedRawTopicPayload(encoded, targetKey) {
+  const topic = decodeUnifiedStateTopic(encoded);
+  let offset = 0;
+  while (offset < topic.length) {
+    const tag = readVarint(topic, offset);
+    const wireType = Number(tag.value & 7n);
+    const number = Number(tag.value >> 3n);
+    if (number === 1 && wireType === 2) {
+      const entry = readLengthField(topic, tag.offset).value;
+      if (firstStringField(entry, 1) === targetKey) {
+        const row = firstLengthField(entry, 2);
+        return row ? firstLengthField(row, 1) : null;
+      }
+    }
+    offset = skipField(topic, tag.offset, wireType);
+  }
+  return null;
+}
+
 function parseOAuthInfo(payload, source) {
   if (!Buffer.isBuffer(payload)) return null;
   const accessToken = text(firstStringField(payload, 1));
@@ -337,13 +398,29 @@ function parseOAuthInfo(payload, source) {
   };
 }
 
-function parseStateDatabasePayload(encoded, source, userStatusEncoded = encoded) {
+function parseAuthStatePayload(payload, source) {
+  if (!Buffer.isBuffer(payload)) return null;
+  let state;
+  try { state = JSON.parse(payload.toString('utf8')); }
+  catch { return null; }
+  const credential = credentialFromTokenPayload(state, source);
+  if (!credential) return null;
+  credential.projectId = text(state.context?.project);
+  return credential;
+}
+
+function parseStateDatabasePayload(encoded, source, userStatusEncoded = encoded, cloudcodeState = '') {
   const oauthPayload = decodeUnifiedTopicPayload(encoded, 'oauthTokenInfoSentinelKey');
-  const credential = parseOAuthInfo(oauthPayload, source);
+  const authStatePayload = decodeUnifiedRawTopicPayload(encoded, 'authStateWithContextSentinelKey');
+  const credential = parseOAuthInfo(oauthPayload, source) || parseAuthStatePayload(authStatePayload, source);
   if (!credential) return null;
   const statusPayload = decodeUnifiedTopicPayload(userStatusEncoded, 'userStatusSentinelKey');
   credential.email = text(firstStringField(statusPayload || Buffer.alloc(0), 3))
     || text(firstStringField(statusPayload || Buffer.alloc(0), 7));
+  if (!credential.email) {
+    try { credential.email = text(JSON.parse(cloudcodeState).user?.email); }
+    catch {}
+  }
   return credential;
 }
 
@@ -444,13 +521,18 @@ async function readStateDatabase(dbPath, fsImpl = fs) {
   const current = await readSqliteValue(dbPath, 'antigravityUnifiedStateSync.oauthToken');
   if (current) {
     let userStatus = '';
+    let cloudcodeState = '';
     try {
       userStatus = await readSqliteValue(dbPath, 'antigravityUnifiedStateSync.userStatus');
     } catch { /* The OAuth row can still be useful when the identity row is absent. */ }
+    try {
+      cloudcodeState = await readSqliteValue(dbPath, 'cloudcode.userState');
+    } catch { /* Older databases may not expose the cloudcode state row. */ }
     const credential = parseStateDatabasePayload(
       current,
       `Antigravity 数据库: ${dbPath}`,
-      userStatus || current
+      userStatus || current,
+      cloudcodeState
     );
     if (credential) return credential;
   }
@@ -517,7 +599,9 @@ async function injectStateDatabase(dbPath, account, secrets) {
       throw new Error(`state.vscdb 中的 OAuth 数据格式无法识别: ${error.message}`);
     }
   }
+  topic = removeUnifiedTopicEntry(topic, 'authStateWithContextSentinelKey');
   topic = Buffer.concat([
+    createUnifiedRawTopicEntry('authStateWithContextSentinelKey', createAuthStatePayload(account, secrets)),
     removeUnifiedTopicEntry(topic, 'oauthTokenInfoSentinelKey'),
     createUnifiedTopicEntry('oauthTokenInfoSentinelKey', createOAuthInfo(account, secrets))
   ]);
@@ -534,6 +618,7 @@ async function injectStateDatabase(dbPath, account, secrets) {
     'CREATE TABLE IF NOT EXISTS ItemTable (key TEXT PRIMARY KEY, value TEXT);',
     `INSERT OR REPLACE INTO ItemTable (key, value) VALUES (${sqlString('antigravityUnifiedStateSync.oauthToken')}, ${sqlString(oauthValue)});`,
     `INSERT OR REPLACE INTO ItemTable (key, value) VALUES (${sqlString('antigravityUnifiedStateSync.userStatus')}, ${sqlString(userStatus)});`,
+    `INSERT OR REPLACE INTO ItemTable (key, value) VALUES (${sqlString('cloudcode.userState')}, ${sqlString(createCloudcodeUserState(account))});`,
     `INSERT OR REPLACE INTO ItemTable (key, value) VALUES (${sqlString('antigravityOnboarding')}, 'true');`,
     `DELETE FROM ItemTable WHERE key = ${sqlString('jetskiStateSync.agentManagerInitState')};`
   ];
@@ -720,10 +805,14 @@ module.exports = {
   encodeVarint,
   createOAuthInfo,
   createUnifiedTopicEntry,
+  createUnifiedRawTopicEntry,
   createUnifiedStateEntry,
+  decodeUnifiedRawTopicPayload,
   removeUnifiedTopicEntry,
   createUserStatusPayload,
   createStringValuePayload,
+  createAuthStatePayload,
+  createCloudcodeUserState,
   candidateStateDatabase,
   injectStateDatabase,
   writeFileCredentialsToDir,
@@ -734,6 +823,7 @@ module.exports = {
   credentialFromTokenPayload,
   parseCredentialPayload,
   parseOAuthInfo,
+  parseAuthStatePayload,
   parseStateDatabasePayload,
   readFileCredentialsFromDir,
   readSystemCredential,

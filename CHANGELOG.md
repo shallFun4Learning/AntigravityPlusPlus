@@ -1,5 +1,11 @@
 # Antigravity++ 更新日志
 
+## v0.1.4（2026-11-27）
+
+- 适配新版 Antigravity 切换账号时读取的 `authStateWithContextSentinelKey` 状态，同步写入 OAuth protobuf、用户状态和 `cloudcode.userState`，避免客户端沿用旧账号状态后回到登录页。
+- 保留旧版 OAuth sentinel 和历史数据库格式，并增加新版认证状态缺少 OAuth sentinel 时的回读回退。
+- 新增 state.vscdb 注入与回读回归测试。
+
 ## v0.1.3（2026-11-25）
 
 - 上游 EasyAntigravity 在已借用的上下文采集链路上增加增量元数据读取和短期缓存；本版本按本项目现有接口只保留尾部刷新、对话截断回退、账号/后台隔离和敏感字段裁剪。

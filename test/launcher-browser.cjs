@@ -216,7 +216,7 @@ async function main() {
     const visible = "document.getElementById('pathModal').style.display === 'flex'";
     const riskVisible = "document.getElementById('accountRiskModal').style.display === 'flex'";
     await socket.command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
-    await waitFor("document.body.dataset.uiState === 'idle'");
+    await waitFor("document.body?.dataset.uiState === 'idle'");
     assert.equal(await evaluate("document.getElementById('launchBtn').disabled"), false);
     assert.equal(await evaluate(riskVisible), false, '普通启动不弹出账号风险提示');
     await evaluate("window.confirm = () => { throw new Error('不应调用原生确认框'); }");
@@ -333,7 +333,7 @@ async function main() {
     reopenedServer.listen(0, '127.0.0.1');
     await once(reopenedServer, 'listening');
     await socket.command('Page.navigate', { url: `http://127.0.0.1:${reopenedServer.address().port}/` });
-    await waitFor("document.body.dataset.uiState === 'idle'");
+    await waitFor("document.body?.dataset.uiState === 'idle'");
     await navigate('accounts');
     await waitFor("!document.querySelector('[data-page=accounts]').hidden");
     await click('accountAddBtn');
@@ -402,7 +402,7 @@ async function main() {
     assert.ok(calls.some(call => call.route === '/api/set-target-path' && call.input.target === 'ide' && call.input.path === 'D:\\Synthetic\\IDE.exe'));
     await click('targetHubBtn');
     await click('launchBtn');
-    await waitFor("document.body.dataset.uiState === 'running'");
+    await waitFor("document.body?.dataset.uiState === 'running'");
     assert.ok(calls.some(call => call.route === '/api/launch'));
     assert.equal(await evaluate("document.getElementById('targetIdeBtn').disabled"), false);
     const runningWrites = writeCount();
@@ -430,7 +430,7 @@ async function main() {
     assert.match(await evaluate("document.getElementById('launchText').textContent"), /重启 Antigravity/);
     assert.equal(await shown('targetNotice'), false);
     publishStatus({ phase: 'idle', clientRunning: false, cdpSockets: 0 });
-    await waitFor("document.body.dataset.uiState === 'idle'");
+    await waitFor("document.body?.dataset.uiState === 'idle'");
     conflict = true;
     await click('launchBtn');
     await waitFor("document.getElementById('processModal').style.display === 'flex'");
@@ -444,12 +444,12 @@ async function main() {
     assert.equal(await evaluate("document.getElementById('processCleanBtn').disabled"), false);
     cleanupFails = false;
     await click('processCleanBtn');
-    await waitFor("document.body.dataset.uiState === 'running'");
+    await waitFor("document.body?.dataset.uiState === 'running'");
     await click('launchBtn');
     await waitFor("document.getElementById('processModal').style.display === 'flex'");
     await click('processCancelBtn');
     publishStatus({ phase: 'idle', clientRunning: false, cdpSockets: 0 });
-    await waitFor("document.body.dataset.uiState === 'idle'");
+    await waitFor("document.body?.dataset.uiState === 'idle'");
     conflict = false;
     failLaunch = true;
     await click('launchBtn');

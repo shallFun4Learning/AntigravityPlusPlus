@@ -9,7 +9,10 @@ const {
   createOAuthInfo,
   createUnifiedStateEntry,
   createUnifiedTopicEntry,
+  createUnifiedRawTopicEntry,
+  createAuthStatePayload,
   createUserStatusPayload,
+  decodeUnifiedRawTopicPayload,
   removeUnifiedTopicEntry,
   injectStateDatabase,
   writeFileCredentialsToDir,
@@ -89,6 +92,12 @@ test('state.vscdb injection backs up the database and writes the current account
   assert.equal(execFileSync('sqlite3', ['-batch', '-noheader', db, "SELECT value FROM ItemTable WHERE key='unrelated';"], { encoding: 'utf8' }).trim(), 'keep-me');
   const oauthValue = execFileSync('sqlite3', ['-batch', '-noheader', db, "SELECT value FROM ItemTable WHERE key='antigravityUnifiedStateSync.oauthToken';"], { encoding: 'utf8' }).trim();
   assert.ok(oauthValue.length > 20);
+  const authState = JSON.parse(decodeUnifiedRawTopicPayload(oauthValue, 'authStateWithContextSentinelKey').toString('utf8'));
+  assert.equal(authState.state, 'signedIn');
+  assert.equal(authState.token.refreshToken, 'refresh-value');
+  assert.equal(authState.context.project, 'aicode-consumers');
+  const cloudcodeState = JSON.parse(execFileSync('sqlite3', ['-batch', '-noheader', db, "SELECT value FROM ItemTable WHERE key='cloudcode.userState';"], { encoding: 'utf8' }).trim());
+  assert.equal(cloudcodeState.user.email, 'test@example.com');
   assert.equal(execFileSync('sqlite3', ['-batch', '-noheader', db, "SELECT value FROM ItemTable WHERE key='antigravityOnboarding';"], { encoding: 'utf8' }).trim(), 'true');
 });
 
@@ -173,6 +182,28 @@ test('new state database format reads OAuth and separate user status rows', asyn
   assert.equal(credential.refreshToken, 'refresh-value');
   assert.equal(credential.email, 'db@example.com');
   assert.equal(credential.isGcpTos, true, '缺少显式标记时应兼容 Antigravity 默认值');
+});
+
+test('state database reads the auth state sentinel when the OAuth sentinel is absent', async t => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'antigravity-plus-plus-auth-state-'));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const db = path.join(temp, 'state.vscdb');
+  const imported = { ...account(), projectId: 'project-from-auth-state' };
+  const oauthValue = Buffer.concat([
+    createUnifiedRawTopicEntry('authStateWithContextSentinelKey', createAuthStatePayload(imported, secrets()))
+  ]).toString('base64');
+  const userStatus = createUnifiedStateEntry('userStatusSentinelKey', createUserStatusPayload('auth-state@example.com'));
+  execFileSync('sqlite3', [db], {
+    input: [
+      'CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT);',
+      `INSERT INTO ItemTable(key, value) VALUES ('antigravityUnifiedStateSync.oauthToken', '${oauthValue}');`,
+      `INSERT INTO ItemTable(key, value) VALUES ('antigravityUnifiedStateSync.userStatus', '${userStatus}');`
+    ].join('\n')
+  });
+  const credential = await readStateDatabase(db);
+  assert.equal(credential.refreshToken, 'refresh-value');
+  assert.equal(credential.email, 'auth-state@example.com');
+  assert.equal(credential.projectId, 'project-from-auth-state');
 });
 
 test('missing state database credentials fail without exposing token data', async t => {

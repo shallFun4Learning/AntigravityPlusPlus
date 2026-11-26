@@ -15,7 +15,7 @@
 
 Antigravity++ is an independent launcher for Antigravity desktop and IDE clients. Manage multiple accounts, import an existing local login, and switch accounts from one panel. Quota rings inside the Antigravity composer show the active model's remaining quota and reset times.
 
-It also provides local proxy configuration, reversible interface localization, and context monitoring. The current version is **0.1.3**.
+It also provides local proxy configuration, reversible interface localization, and context monitoring. The current version is **0.1.4**.
 
 ## Features
 
@@ -135,7 +135,7 @@ The update manifest is stored in `update-manifest.json`. By default, it reads ve
 
 GitHub Actions verifies JavaScript modules, runs the full test suite, executes browser regression tests, and builds the Tauri application. A Release with complete application packages and SHA-256 checksums is published only after Windows x64, macOS Apple Silicon, and macOS Intel all succeed. A failure on any platform stops publication.
 
-- A push to `main` publishes a preview such as `v0.1.3-preview.<run-number>`, using the version from `package.json`.
+- A push to `main` publishes a preview such as `v0.1.4-preview.<run-number>`, using the version from `package.json`.
 - A manual workflow run on `main` also builds and publishes a preview.
 - A `v<version>` tag publishes the corresponding version. Versions with suffixes such as `beta` remain prereleases. The tag must match the versions in `package.json`, `package-lock.json`, the Tauri configuration, and Cargo.
 
